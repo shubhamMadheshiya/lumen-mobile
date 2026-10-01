@@ -8,7 +8,7 @@
  * ─ Multi-layered Logout Flow (API logout, Token wipe, Cross-store reset, Login redirect)
  * ─ Danger Zone (Permanent account & health record deletion)
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -106,7 +106,7 @@ export default function SettingsScreen() {
   const { palette, preference, setPreference } = useTheme();
   const { user, updateProfile, logout, fetchProfile, isLoading } = useAuthStore();
 
-  const styles = makeStyles(palette);
+  const styles = useMemo(() => makeStyles(palette), [palette]);
 
   // Profile Edit Modal state
   const [editNameVisible, setEditNameVisible] = useState(false);

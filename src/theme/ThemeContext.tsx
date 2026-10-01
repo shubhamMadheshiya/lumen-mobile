@@ -9,7 +9,7 @@
  *   const styles = useMemo(() => createStyles(palette), [palette]);
  */
 import React, {
-  createContext, useContext, useEffect, useState, useMemo, ReactNode,
+  createContext, useContext, useEffect, useState, useMemo, useCallback, ReactNode,
 } from 'react';
 import { Appearance, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,9 +35,9 @@ const ThemeContext = createContext<ThemeContextValue>({
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [systemScheme, setSystemScheme] = useState<'light' | 'dark'>(
-    Appearance.getColorScheme() === 'dark' ? 'dark' : 'light'
-  );
+  const [systemScheme, setSystemScheme] = useState<'light' | 'dark'>(() => {
+    return Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
+  });
   const [preference, setPreferenceState] = useState<ColorScheme>('system');
 
   useEffect(() => {
@@ -51,14 +51,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(PREF_KEY).then(stored => {
       if (stored === 'light' || stored === 'dark' || stored === 'system') {
         setPreferenceState(stored);
+        if (typeof (Appearance as any).setColorScheme === 'function') {
+          try {
+            (Appearance as any).setColorScheme(stored === 'system' ? null : stored);
+          } catch {}
+        }
       }
     }).catch(() => {});
   }, []);
 
-  const setPreference = (scheme: ColorScheme) => {
+  const setPreference = useCallback((scheme: ColorScheme) => {
     setPreferenceState(scheme);
     AsyncStorage.setItem(PREF_KEY, scheme).catch(() => {});
-  };
+    if (typeof (Appearance as any).setColorScheme === 'function') {
+      try {
+        (Appearance as any).setColorScheme(scheme === 'system' ? null : scheme);
+      } catch {}
+    }
+  }, []);
 
   const colorScheme: 'light' | 'dark' =
     preference === 'system'
@@ -73,7 +83,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ThemeContextValue>(
     () => ({ palette, colorScheme, preference, setPreference }),
-    [palette, colorScheme, preference],
+    [palette, colorScheme, preference, setPreference],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

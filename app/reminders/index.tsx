@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft, RotateCcw, BellRing } from 'lucide-react-native';
+import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft, RotateCcw, BellRing, Edit2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
@@ -234,7 +234,13 @@ export default function RemindersScreen() {
         ) : (
           filteredReminders.map(reminder => (
             <View key={reminder._id} style={styles.reminderCard}>
-              <View style={styles.cardMain}>
+              <TouchableOpacity
+                style={styles.cardMain}
+                onPress={() => router.push(`/reminders/${reminder._id}`)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit reminder ${reminder.name}`}
+              >
                 <View style={styles.iconCircle}>
                   <Text style={styles.iconText}>{reminder.icon || '⏰'}</Text>
                 </View>
@@ -259,7 +265,7 @@ export default function RemindersScreen() {
                   trackColor={{ false: palette.border, true: palette.secondary }}
                   thumbColor={palette.surface}
                 />
-              </View>
+              </TouchableOpacity>
 
               {/* Card Footer Actions */}
               <View style={styles.cardFooter}>
@@ -297,6 +303,13 @@ export default function RemindersScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.footerRight}>
+                      <TouchableOpacity
+                        style={styles.footerIconBtn}
+                        onPress={() => router.push(`/reminders/${reminder._id}`)}
+                        accessibilityLabel="Edit reminder"
+                      >
+                        <Edit2 size={16} color={palette.textSecondary} />
+                      </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.footerIconBtn}
                         onPress={() => duplicateReminder(reminder._id)}

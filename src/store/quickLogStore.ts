@@ -3,8 +3,11 @@
  * Logs are sent to the server immediately; an "undo" toast appears for 5s.
  */
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { uuidv4 } from '../utils/uuid';
 import { api } from '../api/client';
+
+const STORAGE_KEY = 'lumen:quick_log:today_taps_v1';
 
 export interface QuickTapEntry {
   id: string;           // local UUID (clientId)
@@ -27,6 +30,7 @@ interface QuickLogState {
   undo: () => void;
   resetToday: () => void;
   loadTodayTaps: (quickActionId: string, count: number, lastAt: string) => void;
+  fetchTodayTaps: () => Promise<void>;
 }
 
 export const useQuickLogStore = create<QuickLogState>((set, get) => ({
@@ -48,10 +52,12 @@ export const useQuickLogStore = create<QuickLogState>((set, get) => ({
       lastAt: now,
       synced: false,
     };
-    set(s => ({
-      todayTaps: { ...s.todayTaps, [quickActionId]: entry },
+    const nextTaps = { ...get().todayTaps, [quickActionId]: entry };
+    set({
+      todayTaps: nextTaps,
       undoEntry: entry,
-    }));
+    });
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextTaps)).catch(() => {});
 
     // Set undo timer
     const timer = get().undoTimer;
@@ -70,15 +76,14 @@ export const useQuickLogStore = create<QuickLogState>((set, get) => ({
         answers: [],
         mediaIds: [],
       });
-      set(s => ({
-        todayTaps: {
-          ...s.todayTaps,
-          [quickActionId]: { ...s.todayTaps[quickActionId], serverId: result._id, synced: true },
-        },
-      }));
+      const syncedTaps = {
+        ...get().todayTaps,
+        [quickActionId]: { ...get().todayTaps[quickActionId], serverId: result._id, synced: true },
+      };
+      set({ todayTaps: syncedTaps });
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedTaps)).catch(() => {});
     } catch (err) {
       console.warn('[quickLog] Failed to sync tap, queued for retry:', err);
-      // TODO: add to offline sync queue
     }
   },
 
@@ -90,13 +95,15 @@ export const useQuickLogStore = create<QuickLogState>((set, get) => ({
     const prev = get().todayTaps[entry.quickActionId];
     if (prev) {
       const newCount = Math.max(0, prev.count - 1);
-      set(s => ({
+      const nextTaps = {
+        ...get().todayTaps,
+        [entry.quickActionId]: { ...prev, count: newCount },
+      };
+      set({
         undoEntry: null,
-        todayTaps: {
-          ...s.todayTaps,
-          [entry.quickActionId]: { ...prev, count: newCount },
-        },
-      }));
+        todayTaps: nextTaps,
+      });
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextTaps)).catch(() => {});
     }
 
     // Soft-delete on server if we have the serverId
@@ -109,21 +116,87 @@ export const useQuickLogStore = create<QuickLogState>((set, get) => ({
     set({ undoTimer: null });
   },
 
-  resetToday: () => set({ todayTaps: {}, undoEntry: null }),
+  resetToday: () => {
+    set({ todayTaps: {}, undoEntry: null });
+    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+  },
 
   loadTodayTaps: (quickActionId, count, lastAt) => {
-    set(s => ({
-      todayTaps: {
-        ...s.todayTaps,
-        [quickActionId]: {
-          id: uuidv4(),
-          quickActionId,
-          occurredAt: lastAt,
-          count,
-          lastAt,
-          synced: true,
-        },
+    const nextTaps = {
+      ...get().todayTaps,
+      [quickActionId]: {
+        id: uuidv4(),
+        quickActionId,
+        occurredAt: lastAt,
+        count,
+        lastAt,
+        synced: true,
       },
-    }));
+    };
+    set({ todayTaps: nextTaps });
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextTaps)).catch(() => {});
+  },
+
+  fetchTodayTaps: async () => {
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const logs = await api.get<any[]>('/logs', {
+        params: {
+          from: startOfDay.toISOString(),
+          to: endOfDay.toISOString(),
+          limit: 500,
+        },
+      });
+
+      if (Array.isArray(logs)) {
+        const tapsMap: Record<string, QuickTapEntry> = {};
+        for (const log of logs) {
+          if (log.source === 'quick_action' && log.quickActionId) {
+            const qid = String(log.quickActionId);
+            if (!tapsMap[qid]) {
+              tapsMap[qid] = {
+                id: log.clientId || log._id,
+                quickActionId: qid,
+                occurredAt: log.occurredAt,
+                count: 1,
+                lastAt: log.occurredAt,
+                serverId: log._id,
+                synced: true,
+              };
+            } else {
+              tapsMap[qid].count += 1;
+              if (new Date(log.occurredAt) > new Date(tapsMap[qid].lastAt)) {
+                tapsMap[qid].lastAt = log.occurredAt;
+              }
+            }
+          }
+        }
+        set({ todayTaps: tapsMap });
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(tapsMap)).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('[quickLog] fetchTodayTaps failed, using cached state:', err);
+    }
   },
 }));
+
+// Hydrate from AsyncStorage on startup
+AsyncStorage.getItem(STORAGE_KEY).then(cached => {
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached) as Record<string, QuickTapEntry>;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const validTaps: Record<string, QuickTapEntry> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v.lastAt && v.lastAt.slice(0, 10) === todayStr) {
+          validTaps[k] = v;
+        }
+      }
+      useQuickLogStore.setState({ todayTaps: validTaps });
+    } catch {}
+  }
+}).catch(() => {});

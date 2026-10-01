@@ -37,12 +37,13 @@ export default function TodayScreen() {
   const { user } = useAuthStore();
   const { config, fetchConfig } = useConfigStore();
   const { fetchTodaySession } = useDaySessionStore();
-  const { todayTaps } = useQuickLogStore();
+  const { todayTaps, fetchTodayTaps } = useQuickLogStore();
   const { todaySummary, fetchTodaySummary, isTracking } = useActivityStore();
   const { reminders, fetchReminders } = useReminderStore();
 
   const [refreshing, setRefreshing] = useState(false);
   const [waterModalVisible, setWaterModalVisible] = useState(false);
+  const [selectedWaterActionId, setSelectedWaterActionId] = useState<string | undefined>(undefined);
 
   const loadData = useCallback(async () => {
     await Promise.all([
@@ -50,8 +51,9 @@ export default function TodayScreen() {
       fetchTodaySession(),
       fetchTodaySummary(),
       fetchReminders(),
+      fetchTodayTaps(),
     ]);
-  }, [fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders]);
+  }, [fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps]);
 
   useEffect(() => {
     loadData();
@@ -217,7 +219,10 @@ export default function TodayScreen() {
                   action={action}
                   onPressOverride={
                     action.templateKey === 'qa_water' || action.label.toLowerCase().includes('water')
-                      ? () => setWaterModalVisible(true)
+                      ? () => {
+                          setSelectedWaterActionId(action._id);
+                          setWaterModalVisible(true);
+                        }
                       : undefined
                   }
                 />
@@ -260,7 +265,10 @@ export default function TodayScreen() {
       <WaterQuantityModal
         visible={waterModalVisible}
         onClose={() => setWaterModalVisible(false)}
-        quickActionId={waterAction?._id}
+        quickActionId={selectedWaterActionId || waterAction?._id}
+        onLogged={() => {
+          fetchTodayTaps();
+        }}
       />
     </SafeAreaView>
   );

@@ -37,8 +37,9 @@ export async function uploadMedia(
   sensitive = false,
 ): Promise<UploadResult> {
   // 1. Get pre-signed URL
-  const { data } = await api.post('/media/upload-url', { mimeType, sensitive });
-  const { mediaId, uploadUrl } = data as { mediaId: string; uploadUrl: string };
+  const uploadInfo = await api.post<any>('/media/upload-url', { mimeType, sensitive });
+  const mediaId = uploadInfo?.mediaId || uploadInfo?.data?.mediaId;
+  const uploadUrl = uploadInfo?.uploadUrl || uploadInfo?.data?.uploadUrl;
 
   // 2. Upload to storage
   const blob = await (await fetch(localUri)).blob();
@@ -50,8 +51,8 @@ export async function uploadMedia(
   if (!putRes.ok) throw new Error(`Storage upload failed: ${putRes.status}`);
 
   // 3. Confirm
-  const confirmRes = await api.post('/media/confirm', { mediaId });
-  return { mediaId, url: confirmRes.data.url };
+  const confirmRes = await api.post<any>('/media/confirm', { mediaId });
+  return { mediaId, url: confirmRes?.url || confirmRes?.data?.url || '' };
 }
 
 export async function uploadMediaWithRetry(

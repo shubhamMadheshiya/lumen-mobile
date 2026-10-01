@@ -16,15 +16,15 @@ export function useTimelineSummary(year: number, month: number) {
   return useQuery<DaySeverity[]>({
     queryKey: ['timeline-summary', year, month],
     queryFn: async () => {
-      const res = await api.get('/logs', { params: { from, to, limit: 1000 } });
-      const entries: ILogEntry[] = res.data.logs ?? [];
+      const res = await api.get<any>('/logs', { params: { from, to, limit: 1000 } });
+      const entries: ILogEntry[] = Array.isArray(res) ? res : (res?.logs ?? res?.data ?? []);
 
       const map: Record<string, { maxSeverity: number; hasLogs: boolean }> = {};
       for (const e of entries) {
         const day = toISO(new Date(e.occurredAt));
         if (!map[day]) map[day] = { maxSeverity: -1, hasLogs: true };
         map[day].hasLogs = true;
-        for (const ans of e.answers) {
+        for (const ans of (e.answers || [])) {
           for (const v of ans.values ?? []) {
             if (v.dataType === 'range' && v.fieldKey === 'severity') {
               const s = Number(v.value);
@@ -50,8 +50,8 @@ export function useDayEntries(date: string) {
   return useQuery<ILogEntry[]>({
     queryKey: ['day-entries', date],
     queryFn: async () => {
-      const res = await api.get('/logs', { params: { from, to, limit: 500 } });
-      return res.data.logs ?? [];
+      const res = await api.get<any>('/logs', { params: { from, to, limit: 500 } });
+      return Array.isArray(res) ? res : (res?.logs ?? res?.data ?? []);
     },
     staleTime: 60 * 1000,
   });

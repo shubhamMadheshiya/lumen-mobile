@@ -1227,7 +1227,8 @@ function makeStyles(palette: ThemeTokens) {
       flexDirection: 'row',
       gap: 8,
       paddingHorizontal: 16,
-      paddingBottom: 14,
+      paddingTop: 14,
+      paddingBottom: 16,
     },
     segRowTop: {
       flexDirection: 'row',

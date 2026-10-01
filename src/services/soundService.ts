@@ -1,8 +1,9 @@
 /**
  * Sound Service for Lumen Reminders & Alarms.
  * Manages in-app sound playback and preview for custom alarm tones using expo-av.
+ * Uses resilient dynamic loading with graceful haptic fallback if ExponentAV
+ * native module is not yet compiled into the running APK.
  */
-import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 
 export interface SoundOption {
@@ -58,6 +59,18 @@ export const SOUND_OPTIONS: SoundOption[] = [
   },
 ];
 
+// Resilient native module loader
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let Audio: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const av = require('expo-av');
+  Audio = av?.Audio || null;
+} catch {
+  // ExponentAV native binary is not bundled in the current installed APK
+  Audio = null;
+}
+
 const SOUND_ASSETS: Record<string, any> = {
   chime: require('../../assets/sounds/chime.wav'),
   gentle_bell: require('../../assets/sounds/gentle_bell.wav'),
@@ -66,13 +79,22 @@ const SOUND_ASSETS: Record<string, any> = {
   radar: require('../../assets/sounds/radar.wav'),
 };
 
-let currentSound: Audio.Sound | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let currentSound: any = null;
 let currentPlayingId: string | null = null;
+
+/**
+ * Check whether native audio hardware playback is available in the current APK.
+ */
+export function isAudioAvailable(): boolean {
+  return Audio != null;
+}
 
 /**
  * Configure audio mode to ensure sounds play reliably even in silent/DND mode.
  */
 async function configureAudioMode(): Promise<void> {
+  if (!Audio || typeof Audio.setAudioModeAsync !== 'function') return;
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
@@ -117,9 +139,9 @@ export async function previewSound(
 ): Promise<void> {
   await stopSound();
 
-  if (soundId === 'default' || !SOUND_ASSETS[soundId]) {
-    // For default, trigger haptic confirmation
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  // If native audio is not compiled into the current binary or it's default
+  if (!Audio || soundId === 'default' || !SOUND_ASSETS[soundId]) {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     onFinish?.();
     return;
   }
@@ -131,8 +153,9 @@ export async function previewSound(
     const { sound } = await Audio.Sound.createAsync(
       asset,
       { shouldPlay: true, isLooping: false, volume: 1.0 },
-      (status) => {
-        if (status.isLoaded && status.didJustFinish) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (status: any) => {
+        if (status?.isLoaded && status?.didJustFinish) {
           stopSound().catch(() => {});
           onFinish?.();
         }
@@ -143,6 +166,7 @@ export async function previewSound(
     currentPlayingId = soundId;
   } catch (err) {
     console.warn(`[SoundService] Failed to preview sound "${soundId}":`, err);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     onFinish?.();
   }
 }
@@ -153,8 +177,8 @@ export async function previewSound(
 export async function startAlarmSound(soundId: string = 'default'): Promise<void> {
   await stopSound();
 
-  // If default, native notification channel handles the tone
-  if (soundId === 'default' || !SOUND_ASSETS[soundId]) {
+  // If native audio module is not present or default sound chosen, native channel handles it
+  if (!Audio || soundId === 'default' || !SOUND_ASSETS[soundId]) {
     return;
   }
 

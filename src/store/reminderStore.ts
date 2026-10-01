@@ -27,6 +27,7 @@ export interface CreateReminderInput {
   notificationTitle?: string;
   notificationMessage: string;
   snoozeDurationMinutes?: number;
+  sound?: string;
   linkedQuickActionId?: string;
   linkedQuestionId?: string;
   enabled?: boolean;
@@ -104,6 +105,7 @@ export const useReminderStore = create<ReminderState>((set, get) => ({
       notificationTitle: input.notificationTitle || input.name,
       notificationMessage: input.notificationMessage,
       snoozeDurationMinutes: input.snoozeDurationMinutes || 10,
+      sound: input.sound || 'default',
       linkedQuickActionId: input.linkedQuickActionId,
       linkedQuestionId: input.linkedQuestionId,
       enabled: input.enabled !== undefined ? input.enabled : true,

@@ -27,6 +27,7 @@ import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useConfigStore } from '../../src/store/configStore';
 import { ReminderCategory, ReminderScheduleType, WeekDay } from '@lumen/shared';
+import { SoundPicker } from '../../src/components/SoundPicker';
 
 const ICONS = ['💧', '🚶', '😴', '🧍', '💊', '🧘', '🥗', '☕', '⏰', '🩺', '✨'];
 
@@ -83,9 +84,10 @@ export default function EditReminderScreen() {
   const [inactivityMinutes, setInactivityMinutes] = useState('45');
   const [selectedDays, setSelectedDays] = useState<WeekDay[]>(['MON', 'WED', 'FRI']);
 
-  // Content & Snooze
+  // Content & Snooze & Sound
   const [message, setMessage] = useState('');
   const [snooze, setSnooze] = useState(10);
+  const [sound, setSound] = useState(reminder?.sound || 'default');
   const [linkedQuickActionId, setLinkedQuickActionId] = useState<string | undefined>(undefined);
   const [enabled, setEnabled] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -104,6 +106,7 @@ export default function EditReminderScreen() {
       setSelectedDays(reminder.daysOfWeek && reminder.daysOfWeek.length > 0 ? reminder.daysOfWeek : ['MON', 'WED', 'FRI']);
       setMessage(reminder.notificationMessage || reminder.message || '');
       setSnooze(reminder.snoozeDurationMinutes || 10);
+      setSound(reminder.sound || 'default');
       setLinkedQuickActionId(reminder.linkedQuickActionId);
       setEnabled(reminder.enabled !== undefined ? reminder.enabled : true);
     }
@@ -161,6 +164,7 @@ export default function EditReminderScreen() {
         daysOfWeek: selectedDays,
         notificationMessage: message.trim() || `Time for ${name.trim()}`,
         snoozeDurationMinutes: snooze,
+        sound,
         linkedQuickActionId,
         enabled,
       });
@@ -400,6 +404,9 @@ export default function EditReminderScreen() {
             ))}
           </View>
         </View>
+
+        {/* Alarm Sound Picker */}
+        <SoundPicker value={sound} onChange={setSound} />
 
         {/* Link with Quick-Tap Button */}
         {config?.quickActions && config.quickActions.length > 0 ? (

@@ -18,6 +18,7 @@ import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useConfigStore } from '../../src/store/configStore';
 import { ReminderCategory, ReminderScheduleType, WeekDay } from '@lumen/shared';
+import { SoundPicker } from '../../src/components/SoundPicker';
 
 const ICONS = ['💧', '🚶', '😴', '🧍', '💊', '🧘', '🥗', '☕', '⏰', '🩺', '✨'];
 
@@ -71,9 +72,10 @@ export default function AddReminderScreen() {
   const [inactivityMinutes, setInactivityMinutes] = useState('45');
   const [selectedDays, setSelectedDays] = useState<WeekDay[]>(['MON', 'WED', 'FRI']);
 
-  // Content & Snooze
+  // Content & Snooze & Sound
   const [message, setMessage] = useState('Time to hydrate and stretch');
   const [snooze, setSnooze] = useState(10);
+  const [sound, setSound] = useState('default');
   const [linkedQuickActionId, setLinkedQuickActionId] = useState<string | undefined>(undefined);
   const [enabled, setEnabled] = useState(true);
 
@@ -107,6 +109,7 @@ export default function AddReminderScreen() {
       daysOfWeek: selectedDays,
       notificationMessage: message.trim() || `Time for ${name.trim()}`,
       snoozeDurationMinutes: snooze,
+      sound,
       linkedQuickActionId,
       enabled,
     });
@@ -314,6 +317,9 @@ export default function AddReminderScreen() {
             ))}
           </View>
         </View>
+
+        {/* Alarm Sound Picker */}
+        <SoundPicker value={sound} onChange={setSound} />
 
         {/* Linked Quick Action */}
         <View style={styles.section}>

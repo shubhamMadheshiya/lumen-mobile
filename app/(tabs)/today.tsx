@@ -15,8 +15,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Footprints, Play, Bell, ChevronRight, Droplets, Clock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import {
+  Footprints,
+  Play,
+  Bell,
+  ChevronRight,
+  Droplets,
+  Clock,
+  Stethoscope,
+  Sun,
+  Moon,
+  Timer,
+} from 'lucide-react-native';
 
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
@@ -270,7 +281,7 @@ export default function TodayScreen() {
 
           <View style={styles.glanceGrid}>
             <GlanceCard
-              emoji="💧"
+              icon={Droplets}
               value={`${waterCount}/${waterGoal}`}
               label="Water"
               subtitle={waterGoal ? `${Math.min(100, Math.round((waterCount / waterGoal) * 100))}% goal` : undefined}
@@ -282,7 +293,7 @@ export default function TodayScreen() {
             />
 
             <GlanceCard
-              emoji="🚶"
+              icon={Footprints}
               value={`${todayDistanceKm.toFixed(1)} km`}
               label="Walking"
               subtitle={isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`}
@@ -291,7 +302,7 @@ export default function TodayScreen() {
             />
 
             <GlanceCard
-              emoji="🔔"
+              icon={Bell}
               value={`${reminders.filter(r => r.enabled).length} active`}
               label="Reminders"
               subtitle={reminders.length > 0 ? `${reminders.length} total` : 'None set'}
@@ -300,7 +311,7 @@ export default function TodayScreen() {
             />
 
             <GlanceCard
-              emoji="🩺"
+              icon={Stethoscope}
               value={`${totalTapCount} logged`}
               label="Quick logs"
               subtitle={`${distinctTapCount} metrics`}
@@ -309,7 +320,7 @@ export default function TodayScreen() {
             />
 
             <GlanceCard
-              emoji={wakeTimeStr ? '☀️' : '🌙'}
+              icon={wakeTimeStr ? Sun : Moon}
               value={wakeTimeStr || 'Clock in'}
               label="Day session"
               subtitle={todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')}
@@ -318,7 +329,7 @@ export default function TodayScreen() {
             />
 
             <GlanceCard
-              emoji="⏱️"
+              icon={Timer}
               value={`${todayWalkingMinutes}m`}
               label="Active time"
               subtitle={todayWalkingMinutes > 0 ? 'Today' : 'Start now'}
@@ -342,27 +353,6 @@ export default function TodayScreen() {
                 />
               );
             })}
-
-            {/* Quick Add Log Card */}
-            <TouchableOpacity
-              style={styles.glanceAddCard}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/log');
-              }}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Log a new metric"
-            >
-              <View style={[styles.glanceEmojiBox, { backgroundColor: `${palette.primary}18` }]}>
-                <Text style={[styles.glanceAddPlus, { color: palette.primary }]}>+</Text>
-              </View>
-              <View style={styles.glanceTextCol}>
-                <Text style={[styles.glanceValue, { color: palette.primary }]}>Add Log</Text>
-                <Text style={styles.glanceLabel}>New metric</Text>
-              </View>
-              <ChevronRight size={13} color={palette.textDisabled} style={styles.glanceChevron} />
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -400,7 +390,8 @@ export default function TodayScreen() {
 }
 
 interface GlanceCardProps {
-  emoji: string;
+  icon?: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+  emoji?: string;
   value: string;
   label: string;
   subtitle?: string;
@@ -408,7 +399,7 @@ interface GlanceCardProps {
   onPress?: () => void;
 }
 
-function GlanceCard({ emoji, value, label, subtitle, color, onPress }: GlanceCardProps) {
+function GlanceCard({ icon: IconComponent, emoji, value, label, subtitle, color, onPress }: GlanceCardProps) {
   const { palette } = useTheme();
   const styles = useStyles();
 
@@ -429,7 +420,11 @@ function GlanceCard({ emoji, value, label, subtitle, color, onPress }: GlanceCar
       accessibilityLabel={`${label}: ${value}`}
     >
       <View style={[styles.glanceEmojiBox, { backgroundColor: `${color}18` }]}>
-        <Text style={styles.glanceEmoji}>{emoji}</Text>
+        {IconComponent ? (
+          <IconComponent size={18} color={color} strokeWidth={2.2} />
+        ) : (
+          <Text style={styles.glanceEmoji}>{emoji}</Text>
+        )}
       </View>
       <View style={styles.glanceTextCol}>
         <Text style={styles.glanceValue} numberOfLines={1}>{value}</Text>
@@ -668,22 +663,6 @@ const useStyles = createThemedStyles(palette => ({
     shadowOpacity: 0.03,
     shadowRadius: 3,
     elevation: 1,
-  },
-  glanceAddCard: {
-    width: '48.5%',
-    backgroundColor: palette.surfaceAlt,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderStyle: 'dashed',
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  glanceAddPlus: {
-    fontSize: 20,
-    fontWeight: '700',
   },
   glanceEmojiBox: {
     width: 36,

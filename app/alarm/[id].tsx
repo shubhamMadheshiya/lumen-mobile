@@ -19,6 +19,7 @@ import { Bell, Check, Clock, Volume2, X } from 'lucide-react-native';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useQuickLogStore } from '../../src/store/quickLogStore';
 import { snoozeReminder } from '../../src/services/notifications';
+import { startAlarmSound, stopSound, getSoundOption } from '../../src/services/soundService';
 import { api } from '../../src/api/client';
 import { palette } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
@@ -102,6 +103,16 @@ export default function AlarmScreen() {
     return () => pulseLoop.stop();
   }, [pulseAnim, auraAnim]);
 
+  // Continuous alarm sound playback
+  useEffect(() => {
+    const soundKey = reminder?.sound || 'default';
+    startAlarmSound(soundKey);
+
+    return () => {
+      stopSound().catch(() => {});
+    };
+  }, [reminder?.sound]);
+
   // Continuous alarm vibration pattern (until dismissed or snoozed)
   useEffect(() => {
     const triggerHaptics = () => {
@@ -121,6 +132,7 @@ export default function AlarmScreen() {
   // Action: Snooze 10 minutes
   const handleSnooze = async () => {
     isDismissedRef.current = true;
+    await stopSound().catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (id) {
@@ -141,6 +153,7 @@ export default function AlarmScreen() {
   // Action: Complete / Log
   const handleComplete = async () => {
     isDismissedRef.current = true;
+    await stopSound().catch(() => {});
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (reminder?.linkedQuickActionId) {
@@ -164,6 +177,7 @@ export default function AlarmScreen() {
   // Action: Dismiss
   const handleDismiss = () => {
     isDismissedRef.current = true;
+    stopSound().catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (id) {
@@ -244,8 +258,16 @@ export default function AlarmScreen() {
           {reminder?.name || 'Scheduled Reminder'}
         </Text>
         <Text style={styles.reminderMessage}>
-          {reminder?.message || 'Time to complete your wellness check-in.'}
+          {reminder?.notificationMessage || reminder?.message || 'Time to complete your wellness check-in.'}
         </Text>
+        {reminder?.sound && reminder.sound !== 'default' && (
+          <View style={styles.soundBadge}>
+            <Volume2 size={13} color="#FFFFFF99" />
+            <Text style={styles.soundBadgeText}>
+              {getSoundOption(reminder.sound).icon} {getSoundOption(reminder.sound).label}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Bottom Action Controls */}
@@ -400,6 +422,24 @@ const styles = StyleSheet.create({
     color: '#C4B8AE',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  soundBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF14',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#FFFFFF22',
+  },
+  soundBadgeText: {
+    ...typography.caption,
+    color: '#E8E0D8',
+    fontWeight: '600',
+    fontSize: 12,
   },
   actionsContainer: {
     flexDirection: 'row',

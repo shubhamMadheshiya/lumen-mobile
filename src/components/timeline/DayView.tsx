@@ -5,8 +5,10 @@
  */
 import React, { useMemo } from 'react';
 import {
-  View, Text, ActivityIndicator,
+  View, Text, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
+import { router } from 'expo-router';
+import { Plus } from 'lucide-react-native';
 import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction } from '@lumen/shared';
 import { TimelineItem } from './TimelineItem';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
@@ -83,11 +85,26 @@ export function DayView({
   }
 
   if (entries.length === 0) {
+    const isToday = date === new Date().toISOString().slice(0, 10);
     return (
       <View style={styles.center}>
         <Text style={styles.emptyIcon}>📅</Text>
         <Text style={styles.emptyText}>Nothing logged on {formattedDate}.</Text>
-        <Text style={styles.emptyHint}>Tap quick actions or + Log on the Home screen to add an entry.</Text>
+        <Text style={styles.emptyHint}>
+          {isToday
+            ? 'Track your symptoms, water, medications, or vitals for today.'
+            : 'No logs recorded for this day.'}
+        </Text>
+        {isToday && (
+          <TouchableOpacity
+            style={styles.emptyAddBtn}
+            onPress={() => router.push('/(tabs)/today')}
+            activeOpacity={0.8}
+          >
+            <Plus size={16} color="#FFFFFF" />
+            <Text style={styles.emptyAddText}>Log an Activity</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -154,7 +171,22 @@ const useStyles = createThemedStyles(palette => ({
   },
   emptyIcon: { fontSize: 44 },
   emptyText: { ...typography.body, color: palette.textSecondary, textAlign: 'center', fontWeight: '500' },
-  emptyHint: { ...typography.small, color: palette.textDisabled, textAlign: 'center' },
+  emptyHint: { ...typography.small, color: palette.textDisabled, textAlign: 'center', maxWidth: 260 },
+  emptyAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: palette.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  emptyAddText: {
+    ...typography.bodyBold,
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -1,6 +1,6 @@
 /**
- * CalendarHeatMap — month grid with per-day symptom severity colouring.
- * Tap a day to select it; use prev/next arrows to move between months.
+ * CalendarHeatMap — month grid or compact week strip with per-day symptom severity colouring.
+ * Tap a day to select it; toggle between Week and Month view.
  */
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -21,10 +21,17 @@ interface Props {
   onSelectDate: (date: string) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  viewMode?: 'week' | 'month';
+  onToggleViewMode?: (mode: 'week' | 'month') => void;
+  onPrevWeek?: () => void;
+  onNextWeek?: () => void;
 }
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 function severityColor(severity: number, primaryColor: string): string {
   if (severity < 0) return 'transparent';
@@ -35,102 +42,248 @@ function severityColor(severity: number, primaryColor: string): string {
   return `rgba(239, 80, 80, ${0.35 + (severity - 7) * 0.1})`;
 }
 
-export function CalendarHeatMap({ year, month, data, selectedDate, onSelectDate, onPrevMonth, onNextMonth }: Props) {
+export function CalendarHeatMap({
+  year,
+  month,
+  data,
+  selectedDate,
+  onSelectDate,
+  onPrevMonth,
+  onNextMonth,
+  viewMode = 'week',
+  onToggleViewMode,
+  onPrevWeek,
+  onNextWeek,
+}: Props) {
   const { palette } = useTheme();
   const styles = useStyles();
+
   const dataMap = useMemo(() => {
     const m: Record<string, DaySeverity> = {};
     data.forEach(d => { m[d.date] = d; });
     return m;
   }, [data]);
 
-  const cells = useMemo(() => {
+  // Month grid cells
+  const monthCells = useMemo(() => {
     const firstDay = new Date(year, month, 1);
-    // Monday-first offset: (getDay() + 6) % 7
     const startOffset = (firstDay.getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const result: (number | null)[] = [];
     for (let i = 0; i < startOffset; i++) result.push(null);
     for (let d = 1; d <= daysInMonth; d++) result.push(d);
-    // pad to full rows
     while (result.length % 7 !== 0) result.push(null);
     return result;
   }, [year, month]);
+
+  // Week strip cells (Monday to Sunday containing selectedDate)
+  const weekDays = useMemo(() => {
+    const selectedD = new Date(selectedDate + 'T12:00:00');
+    const dayOfWeek = (selectedD.getDay() + 6) % 7; // 0 = Mon, 6 = Sun
+    const monday = new Date(selectedD);
+    monday.setDate(monday.getDate() - dayOfWeek);
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      return {
+        dayNum: d.getDate(),
+        iso,
+        dayOfWeek: DAYS[i],
+      };
+    });
+  }, [selectedDate]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const isoDate = (day: number) =>
     `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
+  const handlePrev = () => {
+    if (viewMode === 'week' && onPrevWeek) {
+      onPrevWeek();
+    } else {
+      onPrevMonth();
+    }
+  };
+
+  const handleNext = () => {
+    if (viewMode === 'week' && onNextWeek) {
+      onNextWeek();
+    } else {
+      onNextMonth();
+    }
+  };
+
   return (
     <View style={styles.wrap}>
-      {/* Header */}
+      {/* Header with Title and Mode Switcher */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onPrevMonth} style={styles.navBtn} accessibilityRole="button" accessibilityLabel="Previous month">
-          <Text style={styles.navArrow}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.monthLabel}>{MONTH_NAMES[month]} {year}</Text>
-        <TouchableOpacity onPress={onNextMonth} style={styles.navBtn} accessibilityRole="button" accessibilityLabel="Next month">
-          <Text style={styles.navArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Day-of-week header */}
-      <View style={styles.row}>
-        {DAYS.map((d, i) => (
-          <View key={i} style={styles.cell}>
-            <Text style={styles.dayHeader}>{d}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Calendar grid */}
-      {Array.from({ length: cells.length / 7 }, (_, row) => (
-        <View key={row} style={styles.row}>
-          {cells.slice(row * 7, row * 7 + 7).map((day, col) => {
-            if (day === null) return <View key={col} style={styles.cell} />;
-            const iso = isoDate(day);
-            const info = dataMap[iso];
-            const bg = info ? severityColor(info.maxSeverity, palette.primary) : 'transparent';
-            const isToday = iso === todayStr;
-            const isSelected = iso === selectedDate;
-            return (
-              <TouchableOpacity
-                key={col}
-                style={styles.cell}
-                onPress={() => onSelectDate(iso)}
-                accessibilityRole="button"
-                accessibilityLabel={`${day} ${MONTH_NAMES[month]}`}
-              >
-                <View style={[
-                  styles.dayCell,
-                  { backgroundColor: bg },
-                  isToday && styles.today,
-                  isSelected && styles.selected,
-                ]}>
-                  <Text style={[
-                    styles.dayNum,
-                    isSelected && styles.dayNumSelected,
-                    isToday && !isSelected && styles.dayNumToday,
-                  ]}>{day}</Text>
-                  {info?.hasLogs && !isSelected && (
-                    <View style={styles.dot} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.navGroup}>
+          <TouchableOpacity
+            onPress={handlePrev}
+            style={styles.navBtn}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'week' ? 'Previous week' : 'Previous month'}
+          >
+            <Text style={styles.navArrow}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.monthLabel}>
+            {MONTH_NAMES[month]} {year}
+          </Text>
+          <TouchableOpacity
+            onPress={handleNext}
+            style={styles.navBtn}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'week' ? 'Next week' : 'Next month'}
+          >
+            <Text style={styles.navArrow}>›</Text>
+          </TouchableOpacity>
         </View>
-      ))}
 
-      {/* Legend */}
-      <View style={styles.legend}>
-        <Text style={styles.legendLabel}>Severity: </Text>
-        {[0, 3, 5, 7, 10].map(s => (
-          <View key={s} style={[styles.legendDot, { backgroundColor: s === 0 ? palette.primary + '22' : severityColor(s, palette.primary) }]} />
-        ))}
-        <Text style={styles.legendLabel}> None → High</Text>
+        {/* View Mode Toggle Pill (Week vs Month) */}
+        {onToggleViewMode && (
+          <View style={styles.modeToggle}>
+            <TouchableOpacity
+              style={[styles.modeBtn, viewMode === 'week' && styles.modeBtnActive]}
+              onPress={() => onToggleViewMode('week')}
+            >
+              <Text style={[styles.modeText, viewMode === 'week' && styles.modeTextActive]}>
+                Week
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeBtn, viewMode === 'month' && styles.modeBtnActive]}
+              onPress={() => onToggleViewMode('month')}
+            >
+              <Text style={[styles.modeText, viewMode === 'month' && styles.modeTextActive]}>
+                Month
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
+
+      {/* Week Strip Mode */}
+      {viewMode === 'week' && (
+        <View style={styles.weekContainer}>
+          <View style={styles.row}>
+            {weekDays.map((item, i) => {
+              const info = dataMap[item.iso];
+              const bg = info ? severityColor(info.maxSeverity, palette.primary) : 'transparent';
+              const isToday = item.iso === todayStr;
+              const isSelected = item.iso === selectedDate;
+
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.weekCol}
+                  onPress={() => onSelectDate(item.iso)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.dayOfWeek} ${item.dayNum}`}
+                >
+                  <Text style={[styles.dayHeader, isSelected && styles.dayHeaderSelected]}>
+                    {item.dayOfWeek}
+                  </Text>
+                  <View
+                    style={[
+                      styles.dayCell,
+                      { backgroundColor: bg },
+                      isToday && styles.today,
+                      isSelected && styles.selected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayNum,
+                        isSelected && styles.dayNumSelected,
+                        isToday && !isSelected && styles.dayNumToday,
+                      ]}
+                    >
+                      {item.dayNum}
+                    </Text>
+                    {info?.hasLogs && !isSelected && <View style={styles.dot} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Full Month Grid Mode */}
+      {viewMode === 'month' && (
+        <View style={styles.monthContainer}>
+          {/* Day-of-week header */}
+          <View style={styles.row}>
+            {DAYS.map((d, i) => (
+              <View key={i} style={styles.cell}>
+                <Text style={styles.dayHeader}>{d}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Month grid rows */}
+          {Array.from({ length: monthCells.length / 7 }, (_, row) => (
+            <View key={row} style={styles.row}>
+              {monthCells.slice(row * 7, row * 7 + 7).map((day, col) => {
+                if (day === null) return <View key={col} style={styles.cell} />;
+                const iso = isoDate(day);
+                const info = dataMap[iso];
+                const bg = info ? severityColor(info.maxSeverity, palette.primary) : 'transparent';
+                const isToday = iso === todayStr;
+                const isSelected = iso === selectedDate;
+
+                return (
+                  <TouchableOpacity
+                    key={col}
+                    style={styles.cell}
+                    onPress={() => onSelectDate(iso)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${day} ${MONTH_NAMES[month]}`}
+                  >
+                    <View
+                      style={[
+                        styles.dayCell,
+                        { backgroundColor: bg },
+                        isToday && styles.today,
+                        isSelected && styles.selected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dayNum,
+                          isSelected && styles.dayNumSelected,
+                          isToday && !isSelected && styles.dayNumToday,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                      {info?.hasLogs && !isSelected && <View style={styles.dot} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+
+          {/* Legend for month view */}
+          <View style={styles.legend}>
+            <Text style={styles.legendLabel}>Severity: </Text>
+            {[0, 3, 5, 7, 10].map(s => (
+              <View
+                key={s}
+                style={[
+                  styles.legendDot,
+                  { backgroundColor: s === 0 ? palette.primary + '22' : severityColor(s, palette.primary) },
+                ]}
+              />
+            ))}
+            <Text style={styles.legendLabel}> None → High</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -138,22 +291,81 @@ export function CalendarHeatMap({ year, month, data, selectedDate, onSelectDate,
 const CELL_SIZE = 38;
 
 const useStyles = createThemedStyles(palette => ({
-  wrap: { backgroundColor: palette.surface, borderRadius: 16, borderWidth: 1, borderColor: palette.border, padding: 12 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  navBtn: { padding: 6 },
-  navArrow: { ...typography.h3, color: palette.primary },
-  monthLabel: { ...typography.bodyBold, color: palette.text },
-  row: { flexDirection: 'row', justifyContent: 'space-around' },
+  wrap: {
+    backgroundColor: palette.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  navGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  navBtn: { padding: 4 },
+  navArrow: { ...typography.h3, color: palette.primary, fontSize: 20 },
+  monthLabel: { ...typography.bodyBold, color: palette.text, fontSize: 15 },
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: palette.surfaceAlt,
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  modeBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  modeBtnActive: {
+    backgroundColor: palette.primary,
+  },
+  modeText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: palette.textSecondary,
+    fontWeight: '600',
+  },
+  modeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  weekContainer: {
+    paddingVertical: 2,
+  },
+  weekCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  monthContainer: {
+    gap: 2,
+  },
+  row: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   cell: { width: CELL_SIZE, height: CELL_SIZE, alignItems: 'center', justifyContent: 'center' },
-  dayHeader: { ...typography.caption, color: palette.textDisabled, fontWeight: '700' },
-  dayCell: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  dayHeader: { ...typography.caption, color: palette.textDisabled, fontWeight: '700', fontSize: 11 },
+  dayHeaderSelected: { color: palette.primary, fontWeight: '800' },
+  dayCell: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   today: { borderWidth: 2, borderColor: palette.primary },
   selected: { backgroundColor: palette.primary },
-  dayNum: { ...typography.small, color: palette.text, fontWeight: '600' },
-  dayNumSelected: { color: palette.white, fontWeight: '800' },
+  dayNum: { ...typography.small, color: palette.text, fontWeight: '600', fontSize: 13 },
+  dayNumSelected: { color: '#FFFFFF', fontWeight: '800' },
   dayNumToday: { color: palette.primary },
   dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: palette.primary, position: 'absolute', bottom: 2 },
-  legend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, gap: 3 },
-  legendLabel: { ...typography.caption, color: palette.textDisabled },
+  legend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10, gap: 3 },
+  legendLabel: { ...typography.caption, color: palette.textDisabled, fontSize: 11 },
   legendDot: { width: 10, height: 10, borderRadius: 3 },
 }));

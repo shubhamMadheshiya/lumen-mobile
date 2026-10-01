@@ -26,6 +26,7 @@ export default function TimelineScreen() {
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [showCalendar, setShowCalendar] = useState(true);
+  const [calViewMode, setCalViewMode] = useState<'week' | 'month'>('week');
 
   const { config } = useConfigStore();
   const { data: summary = [], isLoading: summaryLoading } = useTimelineSummary(calYear, calMonth);
@@ -56,6 +57,19 @@ export default function TimelineScreen() {
     setCalYear(d.getFullYear());
     setCalMonth(d.getMonth());
   };
+
+  const prevWeek = useCallback(() => {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() - 7);
+    jumpToDate(toISO(d));
+  }, [selectedDate]);
+
+  const nextWeek = useCallback(() => {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + 7);
+    const next = toISO(d);
+    if (next <= today) jumpToDate(next);
+  }, [selectedDate, today]);
 
   // Swipe between days via arrow buttons
   const prevDay = () => {
@@ -129,6 +143,10 @@ export default function TimelineScreen() {
               onSelectDate={setSelectedDate}
               onPrevMonth={prevMonth}
               onNextMonth={nextMonth}
+              viewMode={calViewMode}
+              onToggleViewMode={setCalViewMode}
+              onPrevWeek={prevWeek}
+              onNextWeek={nextWeek}
             />
           </View>
         )}
@@ -138,12 +156,23 @@ export default function TimelineScreen() {
           <TouchableOpacity onPress={prevDay} style={styles.dayNavBtn} accessibilityRole="button" accessibilityLabel="Previous day">
             <Text style={styles.dayNavArrow}>‹</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => jumpToDate(today)} accessibilityRole="button">
+          <View style={styles.dayNavCenter}>
             <Text style={styles.dayLabel}>
               {isToday ? 'Today'
                 : new Date(selectedDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
             </Text>
-          </TouchableOpacity>
+            {!isToday && (
+              <TouchableOpacity
+                onPress={() => jumpToDate(today)}
+                style={styles.todayPill}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Jump to Today"
+              >
+                <Text style={styles.todayPillText}>Today</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <TouchableOpacity onPress={nextDay} style={[styles.dayNavBtn, isToday && styles.dim]} disabled={isToday} accessibilityRole="button" accessibilityLabel="Next day">
             <Text style={styles.dayNavArrow}>›</Text>
           </TouchableOpacity>
@@ -231,7 +260,26 @@ const useStyles = createThemedStyles(palette => ({
   },
   dayNavBtn: { padding: 6 },
   dayNavArrow: { ...typography.h3, color: palette.primary },
+  dayNavCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   dayLabel: { ...typography.bodyBold, color: palette.text },
+  todayPill: {
+    backgroundColor: palette.primary + '18',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.primary + '33',
+  },
+  todayPillText: {
+    ...typography.caption,
+    color: palette.primary,
+    fontWeight: '700',
+    fontSize: 11,
+  },
   dim: { opacity: 0.3 },
   statsBanner: {
     flexDirection: 'row',

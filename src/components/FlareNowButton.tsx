@@ -6,12 +6,14 @@ import React, { useEffect } from 'react';
 import { TouchableOpacity, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { Zap } from 'lucide-react-native';
 import { useConfigStore } from '../store/configStore';
 import { useQuickLogConfigStore } from '../store/quickLogConfigStore';
 import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 
 export function QuickLogButton() {
+  const { palette } = useTheme();
   const styles = useStyles();
   const { config } = useConfigStore();
   const { selectedQuestionIds, loadSelectedQuestions } = useQuickLogConfigStore();
@@ -39,7 +41,7 @@ export function QuickLogButton() {
     >
       <View style={styles.inner}>
         <View style={styles.iconCircle}>
-          <Text style={styles.icon}>⚡</Text>
+          <Zap size={20} color={palette.primary} fill={palette.primary} />
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.labelRow}>

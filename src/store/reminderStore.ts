@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '../utils/uuid';
 import { IReminder, ReminderCategory, ReminderScheduleType, WeekDay } from '@lumen/shared';
 import { api } from '../api/client';
 import { scheduleReminder, cancelReminder, snoozeReminder } from '../services/notifications';

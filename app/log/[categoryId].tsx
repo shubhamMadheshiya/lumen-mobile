@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '../../src/utils/uuid';
 import { IQuestion, IOption, ICategory, Answer, ILogEntry } from '@lumen/shared';
 import { useConfigStore } from '../../src/store/configStore';
 import { useDaySessionStore } from '../../src/store/daySessionStore';

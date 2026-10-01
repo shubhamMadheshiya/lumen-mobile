@@ -35,20 +35,24 @@ export function useGoogleAuth() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const handledRef = useRef(false);
 
+  const effectiveAndroidId = ANDROID_CLIENT_ID || WEB_CLIENT_ID;
+  const effectiveIosId     = IOS_CLIENT_ID     || WEB_CLIENT_ID;
+
   // useIdTokenAuthRequest requests responseType: 'id_token' on web and PKCE code exchange on native
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    webClientId:     WEB_CLIENT_ID     || PLACEHOLDER,
-    androidClientId: ANDROID_CLIENT_ID || PLACEHOLDER,
-    iosClientId:     IOS_CLIENT_ID     || PLACEHOLDER,
+    clientId:        WEB_CLIENT_ID        || PLACEHOLDER,
+    webClientId:     WEB_CLIENT_ID        || PLACEHOLDER,
+    androidClientId: effectiveAndroidId   || PLACEHOLDER,
+    iosClientId:     effectiveIosId       || PLACEHOLDER,
     scopes: ['openid', 'profile', 'email'],
   });
 
   const platformClientId =
-    Platform.OS === 'android' ? ANDROID_CLIENT_ID :
-    Platform.OS === 'ios'     ? IOS_CLIENT_ID     :
+    Platform.OS === 'android' ? effectiveAndroidId :
+    Platform.OS === 'ios'     ? effectiveIosId     :
                                 WEB_CLIENT_ID;
 
-  const googleReady = !!request && !!platformClientId;
+  const googleReady = !!request && !!platformClientId && platformClientId !== PLACEHOLDER;
 
   const processIdToken = async (idToken: string) => {
     if (handledRef.current) return;

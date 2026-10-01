@@ -91,7 +91,8 @@ export async function apiRequest<T = unknown>(
 
   const resp = await fetch(`${BASE_URL}${path}`, { ...options, headers });
 
-  if (resp.status === 401 && retry) {
+  const isAuthEndpoint = path.startsWith('/auth/');
+  if (resp.status === 401 && retry && !isAuthEndpoint) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       return apiRequest<T>(path, options, false);

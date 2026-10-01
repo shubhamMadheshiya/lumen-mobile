@@ -8,7 +8,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, Platform,
 } from 'react-native';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '../src/utils/uuid';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { IQuestion, IOption, Answer, QuestionFrequency } from '@lumen/shared';
 import { useConfigStore } from '../src/store/configStore';

@@ -3,7 +3,7 @@
  * Logs are sent to the server immediately; an "undo" toast appears for 5s.
  */
 import { create } from 'zustand';
-import { v4 as uuidv4 } from 'uuid';
+import { uuidv4 } from '../utils/uuid';
 import { api } from '../api/client';
 
 export interface QuickTapEntry {

@@ -130,6 +130,21 @@ export function useGoogleAuth() {
   }, [response]);
 
   const signInWithGoogle = async () => {
+    const isExpoGo =
+      Constants.appOwnership === 'expo' ||
+      (Constants.executionEnvironment as string) === 'storeClient';
+
+    if (isExpoGo && Platform.OS !== 'web') {
+      Alert.alert(
+        'Google Sign-In in Expo Go',
+        'Google OAuth blocks "exp://" development URLs and cannot be tested directly inside the Expo Go app.\n\n' +
+        '• For local testing in Expo Go: Please sign in with Email & Password.\n' +
+        '• For Google Sign-In: Install the standalone APK build (where package com.aifalabs.lumen is registered) or sign in via the Web browser.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     handledRef.current = false;
     setGoogleLoading(true);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {

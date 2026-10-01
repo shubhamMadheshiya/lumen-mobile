@@ -12,6 +12,10 @@ import { useNotificationSync } from '../src/hooks/useNotificationSync';
 import { flushQueue } from '../src/services/mediaUpload';
 import { useConfigStore } from '../src/store/configStore';
 import { useAuthStore } from '../src/store/authStore';
+import { installGlobalAlert, CustomAlertModal } from '../src/components/alert';
+
+// Install custom alert interceptor globally for all Alert.alert() calls
+installGlobalAlert();
 
 // Handle OAuth redirect completion on web as early as possible
 if (Platform.OS === 'web') {
@@ -56,6 +60,7 @@ function AppBootstrap() {
           contentStyle: { backgroundColor: palette.background },
         }}
       />
+      <CustomAlertModal />
     </>
   );
 }

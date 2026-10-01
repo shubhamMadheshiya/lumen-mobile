@@ -36,14 +36,14 @@ jobs:
       - name: Expo Prebuild Android
         run: npx expo prebuild --platform android --clean
 
-      - name: Build APK via Gradle
+      - name: Build Standalone Release APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lumen-android-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: lumen-android-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk

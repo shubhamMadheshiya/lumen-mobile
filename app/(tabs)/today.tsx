@@ -38,7 +38,7 @@ export default function TodayScreen() {
   const styles = useStyles();
   const { user } = useAuthStore();
   const { config, fetchConfig } = useConfigStore();
-  const { fetchTodaySession } = useDaySessionStore();
+  const { todaySession, fetchTodaySession } = useDaySessionStore();
   const { todayTaps, fetchTodayTaps } = useQuickLogStore();
   const { todaySummary, fetchTodaySummary, isTracking } = useActivityStore();
   const { reminders, fetchReminders } = useReminderStore();
@@ -78,6 +78,15 @@ export default function TodayScreen() {
   const todayWalkingMinutes = todaySummary?.totalDurationMinutes ?? 0;
 
   const activeReminders = reminders.filter(r => r.enabled).slice(0, 3);
+
+  const totalTapCount = Object.values(todayTaps).reduce((sum, t) => sum + (t?.count ?? 0), 0);
+  const distinctTapCount = Object.values(todayTaps).filter(t => t.count > 0).length;
+  const wakeTimeStr = todaySession?.wakeTime
+    ? new Date(todaySession.wakeTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : null;
+  const customGoalActions = (config?.quickActions ?? []).filter(
+    a => a.isVisible && a.dailyGoal && a.templateKey !== 'qa_water' && !a.label.toLowerCase().includes('water')
+  );
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -235,11 +244,117 @@ export default function TodayScreen() {
 
         {/* Today at a glance */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today at a glance</Text>
-          <View style={styles.glanceRow}>
-            <GlanceCard emoji="💧" value={`${waterCount}/${waterGoal}`} label="Water" color={palette.secondary} />
-            <GlanceCard emoji="🚶" value={`${todayDistanceKm.toFixed(1)} km`} label="Walking" color={palette.primary} />
-            <GlanceCard emoji="🩺" value={String(Object.values(todayTaps).filter(t => t.count > 0).length)} label="Quick logs" color={palette.catSymptom} />
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Today at a glance</Text>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/timeline');
+              }}
+              style={styles.seeAllBtn}
+              accessibilityRole="button"
+              accessibilityLabel="View full timeline"
+            >
+              <Text style={styles.seeAllText}>Timeline</Text>
+              <ChevronRight size={14} color={palette.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.glanceGrid}>
+            <GlanceCard
+              emoji="💧"
+              value={`${waterCount}/${waterGoal}`}
+              label="Water"
+              subtitle={waterGoal ? `${Math.min(100, Math.round((waterCount / waterGoal) * 100))}% goal` : undefined}
+              color={palette.secondary}
+              onPress={() => {
+                setSelectedWaterActionId(waterAction?._id);
+                setWaterModalVisible(true);
+              }}
+            />
+
+            <GlanceCard
+              emoji="🚶"
+              value={`${todayDistanceKm.toFixed(1)} km`}
+              label="Walking"
+              subtitle={isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`}
+              color={palette.primary}
+              onPress={handleStartWalking}
+            />
+
+            <GlanceCard
+              emoji="🔔"
+              value={`${reminders.filter(r => r.enabled).length} active`}
+              label="Reminders"
+              subtitle={reminders.length > 0 ? `${reminders.length} total` : 'None set'}
+              color={palette.catMood}
+              onPress={() => router.push('/reminders')}
+            />
+
+            <GlanceCard
+              emoji="🩺"
+              value={`${totalTapCount} logged`}
+              label="Quick logs"
+              subtitle={`${distinctTapCount} metrics`}
+              color={palette.catSymptom}
+              onPress={() => router.push('/(tabs)/timeline')}
+            />
+
+            <GlanceCard
+              emoji={wakeTimeStr ? '☀️' : '🌙'}
+              value={wakeTimeStr || 'Clock in'}
+              label="Day session"
+              subtitle={todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')}
+              color={palette.catHabits}
+              onPress={() => router.push('/(tabs)/today')}
+            />
+
+            <GlanceCard
+              emoji="⏱️"
+              value={`${todayWalkingMinutes}m`}
+              label="Active time"
+              subtitle={todayWalkingMinutes > 0 ? 'Today' : 'Start now'}
+              color={palette.catFood}
+              onPress={handleStartWalking}
+            />
+
+            {/* Any custom Quick Actions with daily goals */}
+            {customGoalActions.map(action => {
+              const count = todayTaps[action._id]?.count ?? 0;
+              const target = action.dailyGoal ? Math.round(action.dailyGoal / (action.defaultValue ?? 1)) : 1;
+              return (
+                <GlanceCard
+                  key={action._id}
+                  emoji={action.icon || '🎯'}
+                  value={`${count}/${target}`}
+                  label={action.label}
+                  subtitle={`${Math.min(100, Math.round((count / target) * 100))}% goal`}
+                  color={action.color || palette.primary}
+                  onPress={() => router.push('/log')}
+                />
+              );
+            })}
+
+            {/* Quick Add Log Card */}
+            <TouchableOpacity
+              style={styles.glanceAddCard}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/log');
+              }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Log a new metric"
+            >
+              <View style={[styles.glanceEmojiBox, { backgroundColor: `${palette.primary}18` }]}>
+                <Text style={[styles.glanceAddPlus, { color: palette.primary }]}>+</Text>
+              </View>
+              <View style={styles.glanceTextCol}>
+                <Text style={[styles.glanceValue, { color: palette.primary }]}>Add Log</Text>
+                <Text style={styles.glanceLabel}>New metric</Text>
+              </View>
+              <ChevronRight size={13} color={palette.textDisabled} style={styles.glanceChevron} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -276,14 +391,45 @@ export default function TodayScreen() {
   );
 }
 
-function GlanceCard({ emoji, value, label, color }: { emoji: string; value: string; label: string; color: string }) {
+interface GlanceCardProps {
+  emoji: string;
+  value: string;
+  label: string;
+  subtitle?: string;
+  color: string;
+  onPress?: () => void;
+}
+
+function GlanceCard({ emoji, value, label, subtitle, color, onPress }: GlanceCardProps) {
+  const { palette } = useTheme();
   const styles = useStyles();
+
+  const handlePress = () => {
+    if (onPress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
+  };
+
   return (
-    <View style={[styles.glanceCard, { borderLeftColor: color }]}>
-      <Text style={styles.glanceEmoji}>{emoji}</Text>
-      <Text style={styles.glanceValue}>{value}</Text>
-      <Text style={styles.glanceLabel}>{label}</Text>
-    </View>
+    <TouchableOpacity
+      style={[styles.glanceCard, { borderLeftColor: color }]}
+      onPress={handlePress}
+      activeOpacity={onPress ? 0.7 : 1}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+    >
+      <View style={[styles.glanceEmojiBox, { backgroundColor: `${color}18` }]}>
+        <Text style={styles.glanceEmoji}>{emoji}</Text>
+      </View>
+      <View style={styles.glanceTextCol}>
+        <Text style={styles.glanceValue} numberOfLines={1}>{value}</Text>
+        <Text style={styles.glanceLabel} numberOfLines={1}>{label}</Text>
+        {subtitle ? <Text style={styles.glanceSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
+      </View>
+      {onPress ? <ChevronRight size={13} color={palette.textDisabled} style={styles.glanceChevron} /> : null}
+    </TouchableOpacity>
   );
 }
 
@@ -480,31 +626,92 @@ const useStyles = createThemedStyles(palette => ({
     flexWrap: 'wrap',
     gap: 10,
   },
-  glanceRow: {
+  seeAllBtn: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  seeAllText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: palette.primary,
+  },
+  glanceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
+    marginTop: 2,
   },
   glanceCard: {
-    flex: 1,
+    width: '48.5%',
     backgroundColor: palette.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: palette.border,
     borderLeftWidth: 4,
-    padding: 12,
+    padding: 10,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  glanceAddCard: {
+    width: '48.5%',
+    backgroundColor: palette.surfaceAlt,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderStyle: 'dashed',
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  glanceAddPlus: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  glanceEmojiBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   glanceEmoji: {
-    fontSize: 22,
+    fontSize: 18,
+  },
+  glanceTextCol: {
+    flex: 1,
+    justifyContent: 'center',
   },
   glanceValue: {
-    ...typography.h3,
+    ...typography.body,
+    fontSize: 15,
+    fontWeight: '700',
     color: palette.text,
   },
   glanceLabel: {
     ...typography.caption,
+    fontSize: 12,
     color: palette.textSecondary,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  glanceSubtitle: {
+    ...typography.caption,
+    fontSize: 10,
+    color: palette.textDisabled,
+    marginTop: 1,
+  },
+  glanceChevron: {
+    opacity: 0.5,
   },
   fabContainer: {
     position: 'absolute',

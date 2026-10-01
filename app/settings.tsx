@@ -49,6 +49,8 @@ import {
   Lock,
   Heart,
   Ruler,
+  Scale,
+  Calendar,
 } from 'lucide-react-native';
 
 import { useTheme } from '../src/theme/ThemeContext';
@@ -100,6 +102,14 @@ const COMMON_CONDITIONS = [
   'IBS',
 ];
 
+const GENDER_OPTIONS: { key: 'male' | 'female' | 'non-binary' | 'other' | 'prefer_not_to_say'; label: string }[] = [
+  { key: 'male', label: 'Male' },
+  { key: 'female', label: 'Female' },
+  { key: 'non-binary', label: 'Non-Binary' },
+  { key: 'other', label: 'Other' },
+  { key: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
+
 const APP_LOCK_KEY = 'lumen:security:app_lock';
 
 export default function SettingsScreen() {
@@ -118,6 +128,13 @@ export default function SettingsScreen() {
   const [customCondition, setCustomCondition] = useState('');
   const [isUpdatingConditions, setIsUpdatingConditions] = useState(false);
 
+  // Personal Vitals & Demographics state
+  const [age, setAge] = useState(user?.age != null ? String(user.age) : '');
+  const [weight, setWeight] = useState(user?.weight != null ? String(user.weight) : '');
+  const [gender, setGender] = useState<string>(user?.gender || '');
+  const [isSavingVitals, setIsSavingVitals] = useState(false);
+  const [vitalsSaved, setVitalsSaved] = useState(false);
+
   // Security state
   const [appLock, setAppLock] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -133,7 +150,12 @@ export default function SettingsScreen() {
     if (user?.name) {
       setNewName(user.name);
     }
-  }, [user?.name]);
+    if (user) {
+      if (user.age != null) setAge(String(user.age));
+      if (user.weight != null) setWeight(String(user.weight));
+      if (user.gender) setGender(user.gender);
+    }
+  }, [user?.name, user?.age, user?.weight, user?.gender]);
 
   // Initials generator
   const initials = user?.name
@@ -208,6 +230,40 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Failed to add condition.');
     } finally {
       setIsUpdatingConditions(false);
+    }
+  };
+
+  // Save Vitals Handler
+  const handleSaveVitals = async () => {
+    setIsSavingVitals(true);
+    try {
+      const parsedAge = age.trim() ? parseInt(age.trim(), 10) : undefined;
+      const parsedWeight = weight.trim() ? parseFloat(weight.trim()) : undefined;
+
+      if (parsedAge !== undefined && (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 130)) {
+        Alert.alert('Invalid Age', 'Please enter a valid age between 0 and 130.');
+        setIsSavingVitals(false);
+        return;
+      }
+      if (parsedWeight !== undefined && (isNaN(parsedWeight) || parsedWeight <= 0 || parsedWeight > 500)) {
+        Alert.alert('Invalid Weight', 'Please enter a valid weight.');
+        setIsSavingVitals(false);
+        return;
+      }
+
+      await updateProfile({
+        age: parsedAge,
+        weight: parsedWeight,
+        gender: (gender as any) || undefined,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setVitalsSaved(true);
+      setTimeout(() => setVitalsSaved(false), 2500);
+    } catch {
+      Alert.alert('Error', 'Failed to save personal vitals.');
+    } finally {
+      setIsSavingVitals(false);
     }
   };
 
@@ -379,6 +435,109 @@ export default function SettingsScreen() {
               ) : null}
             </View>
           </View>
+        </View>
+
+        {/* Personal Vitals & Demographics */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Personal Vitals & Demographics</Text>
+          {vitalsSaved && (
+            <View style={styles.savedPill}>
+              <Check size={12} color="#10B981" />
+              <Text style={styles.savedPillText}>Saved</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.sectionDescription}>
+          Recorded confidentially for symptom correlations, dosage tracking, and metabolic baselines.
+        </Text>
+
+        <View style={styles.card}>
+          <View style={styles.vitalsRow}>
+            {/* Age input */}
+            <View style={styles.vitalInputCol}>
+              <View style={styles.vitalLabelRow}>
+                <Calendar size={13} color={palette.primary} />
+                <Text style={styles.vitalInputLabel}>Age</Text>
+              </View>
+              <View style={styles.vitalInputWrap}>
+                <TextInput
+                  style={styles.vitalInput}
+                  value={age}
+                  onChangeText={setAge}
+                  placeholder="e.g. 29"
+                  placeholderTextColor={palette.placeholder}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+                <Text style={styles.vitalUnitSuffix}>yrs</Text>
+              </View>
+            </View>
+
+            {/* Weight input */}
+            <View style={styles.vitalInputCol}>
+              <View style={styles.vitalLabelRow}>
+                <Scale size={13} color={palette.primary} />
+                <Text style={styles.vitalInputLabel}>Weight</Text>
+              </View>
+              <View style={styles.vitalInputWrap}>
+                <TextInput
+                  style={styles.vitalInput}
+                  value={weight}
+                  onChangeText={setWeight}
+                  placeholder={user?.preferences?.units === 'imperial' ? 'e.g. 154' : 'e.g. 70'}
+                  placeholderTextColor={palette.placeholder}
+                  keyboardType="decimal-pad"
+                  maxLength={5}
+                />
+                <Text style={styles.vitalUnitSuffix}>
+                  {user?.preferences?.units === 'imperial' ? 'lbs' : 'kg'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Gender Identity */}
+          <Text style={[styles.vitalInputLabel, { marginTop: 14, marginBottom: 8 }]}>Gender Identity</Text>
+          <View style={styles.chipsContainer}>
+            {GENDER_OPTIONS.map(opt => {
+              const isSelected = gender === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.genderChip, isSelected && styles.genderChipActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setGender(prev => prev === opt.key ? '' : opt.key);
+                  }}
+                  {...buttonProps(`Gender: ${opt.label}`, false)}
+                >
+                  {isSelected && <Check size={12} color="#FFFFFF" style={{ marginRight: 4 }} />}
+                  <Text style={[styles.genderChipText, isSelected && styles.genderChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Save Vitals Button */}
+          <TouchableOpacity
+            style={[styles.saveVitalsBtn, vitalsSaved && styles.saveVitalsBtnSuccess]}
+            onPress={handleSaveVitals}
+            disabled={isSavingVitals}
+            {...buttonProps('Save personal vitals')}
+          >
+            {isSavingVitals ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : vitalsSaved ? (
+              <View style={styles.btnRow}>
+                <Check size={16} color="#FFFFFF" />
+                <Text style={styles.saveVitalsBtnText}>Vitals Saved</Text>
+              </View>
+            ) : (
+              <Text style={styles.saveVitalsBtnText}>Save Vitals</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Health Conditions & Diagnoses */}
@@ -1186,6 +1345,110 @@ function makeStyles(palette: ThemeTokens) {
       ...typography.body,
       color: '#FFFFFF',
       fontWeight: '700',
+    },
+    // Vitals section
+    vitalsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    vitalInputCol: {
+      flex: 1,
+    },
+    vitalLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 6,
+    },
+    vitalInputLabel: {
+      ...typography.caption,
+      color: palette.text,
+      fontWeight: '700',
+      fontSize: 12,
+    },
+    vitalInputWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: palette.surfaceAlt,
+      borderWidth: 1,
+      borderColor: palette.border,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+    },
+    vitalInput: {
+      flex: 1,
+      paddingVertical: 10,
+      color: palette.text,
+      ...typography.body,
+      fontWeight: '600',
+      fontSize: 15,
+    },
+    vitalUnitSuffix: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      fontWeight: '600',
+      marginLeft: 4,
+    },
+    genderChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 20,
+      backgroundColor: palette.surfaceAlt,
+      borderWidth: 1,
+      borderColor: palette.border,
+    },
+    genderChipActive: {
+      backgroundColor: palette.primary,
+      borderColor: palette.primary,
+    },
+    genderChipText: {
+      ...typography.caption,
+      color: palette.text,
+      fontWeight: '600',
+      fontSize: 12,
+    },
+    genderChipTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+    },
+    saveVitalsBtn: {
+      marginTop: 16,
+      backgroundColor: palette.primary,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    saveVitalsBtnSuccess: {
+      backgroundColor: '#10B981',
+    },
+    saveVitalsBtnText: {
+      ...typography.body,
+      color: '#FFFFFF',
+      fontWeight: '700',
+      fontSize: 14,
+    },
+    btnRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    savedPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: '#10B9811A',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 12,
+    },
+    savedPillText: {
+      ...typography.caption,
+      color: '#10B981',
+      fontWeight: '700',
+      fontSize: 11,
     },
   });
 }

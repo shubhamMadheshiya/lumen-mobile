@@ -11,25 +11,86 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import {
+  FolderTree,
+  Zap,
+  MousePointerClick,
+  Library,
+  Pill,
+  Bell,
+  UserCheck,
+  Share2,
+  ChevronRight,
+} from 'lucide-react-native';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useConfigStore } from '../../src/store/configStore';
 
 interface NavItem {
-  emoji: string;
+  icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+  color: string;
   title: string;
   subtitle: string;
   route: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { emoji: '🗂️', title: 'Categories & Questions', subtitle: 'Build your tracking forms', route: '/customize/categories' },
-  { emoji: '⚡', title: 'Quick-tap buttons',       subtitle: 'Manage your home screen buttons', route: '/customize/quick-actions' },
-  { emoji: '📚', title: 'Template library',         subtitle: 'Add ready-made trackers', route: '/customize/templates' },
-  { emoji: '💊', title: 'Medications',              subtitle: 'Your medication list', route: '/customize/medications' },
-  { emoji: '🔔', title: 'Reminders',               subtitle: 'Time and inactivity alerts', route: '/customize/reminders' },
-  { emoji: '👤', title: 'Profile & Settings',       subtitle: 'Personal info, conditions & app preferences', route: '/settings' },
-  { emoji: '📤', title: 'Export config',            subtitle: 'Back up or share your setup', route: '/customize/export' },
+  {
+    icon: FolderTree,
+    color: '#F59E0B',
+    title: 'Categories & Questions',
+    subtitle: 'Build your tracking forms',
+    route: '/customize/categories',
+  },
+  {
+    icon: Zap,
+    color: '#FF6B35',
+    title: 'Quick Log Setup',
+    subtitle: 'Choose up to 5 questions for Quick Log',
+    route: '/customize/quick-log-questions',
+  },
+  {
+    icon: MousePointerClick,
+    color: '#10B981',
+    title: 'Quick-tap buttons',
+    subtitle: 'Manage your home screen buttons',
+    route: '/customize/quick-actions',
+  },
+  {
+    icon: Library,
+    color: '#8B5CF6',
+    title: 'Template library',
+    subtitle: 'Add ready-made trackers',
+    route: '/customize/templates',
+  },
+  {
+    icon: Pill,
+    color: '#F43F5E',
+    title: 'Medications',
+    subtitle: 'Your medication list',
+    route: '/customize/medications',
+  },
+  {
+    icon: Bell,
+    color: '#0284C7',
+    title: 'Reminders',
+    subtitle: 'Time and inactivity alerts',
+    route: '/reminders',
+  },
+  {
+    icon: UserCheck,
+    color: '#64748B',
+    title: 'Profile & Settings',
+    subtitle: 'Personal info, conditions & app preferences',
+    route: '/settings',
+  },
+  {
+    icon: Share2,
+    color: '#059669',
+    title: 'Export config',
+    subtitle: 'Back up or share your setup',
+    route: '/customize/export',
+  },
 ];
 
 export default function CustomizeScreen() {
@@ -75,6 +136,9 @@ function Chip({ label }: { label: string }) {
 
 function NavCard({ item }: { item: NavItem }) {
   const navStyles = useNavStyles();
+  const { palette } = useTheme();
+  const IconComponent = item.icon;
+
   return (
     <TouchableOpacity
       style={navStyles.card}
@@ -83,12 +147,14 @@ function NavCard({ item }: { item: NavItem }) {
       accessibilityLabel={item.title}
       activeOpacity={0.75}
     >
-      <Text style={navStyles.emoji}>{item.emoji}</Text>
+      <View style={[navStyles.iconBadge, { backgroundColor: item.color + '1A' }]}>
+        <IconComponent size={20} color={item.color} strokeWidth={2.2} />
+      </View>
       <View style={navStyles.text}>
         <Text style={navStyles.title}>{item.title}</Text>
         <Text style={navStyles.subtitle}>{item.subtitle}</Text>
       </View>
-      <Text style={navStyles.chevron}>›</Text>
+      <ChevronRight size={18} color={palette.textDisabled} />
     </TouchableOpacity>
   );
 }
@@ -111,16 +177,27 @@ const useNavStyles = createThemedStyles(palette => ({
     alignItems: 'center',
     backgroundColor: palette.surface,
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: palette.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  emoji:    { fontSize: 26, marginRight: 14 },
+  iconBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
   text:     { flex: 1 },
-  title:    { ...typography.bodyBold, color: palette.text },
-  subtitle: { ...typography.small, color: palette.textSecondary, marginTop: 2 },
-  chevron:  { ...typography.h3, color: palette.textDisabled, marginLeft: 8 },
+  title:    { ...typography.bodyBold, color: palette.text, fontSize: 15 },
+  subtitle: { ...typography.caption, color: palette.textSecondary, marginTop: 2, fontSize: 12 },
 }));
 
 const useStyles = createThemedStyles(palette => ({

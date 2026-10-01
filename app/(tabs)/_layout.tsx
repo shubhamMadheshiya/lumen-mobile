@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { Home, CalendarDays, Sparkles, SlidersHorizontal } from 'lucide-react-native';
 import { useTheme } from '../../src/theme/ThemeContext';
 
 export default function TabLayout() {
@@ -15,10 +16,11 @@ export default function TabLayout() {
           borderTopColor: palette.border,
           height: 60,
           paddingBottom: 8,
+          paddingTop: 6,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '500',
+          fontWeight: '600',
         },
       }}
     >
@@ -26,35 +28,39 @@ export default function TabLayout() {
         name="today"
         options={{
           title: 'Today',
-          tabBarIcon: ({ color }) => <TabIcon emoji="🏠" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Home size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+          ),
         }}
       />
       <Tabs.Screen
         name="timeline"
         options={{
           title: 'Timeline',
-          tabBarIcon: ({ color }) => <TabIcon emoji="📅" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <CalendarDays size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+          ),
         }}
       />
       <Tabs.Screen
         name="insights"
         options={{
           title: 'Insights',
-          tabBarIcon: ({ color }) => <TabIcon emoji="✨" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Sparkles size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+          ),
         }}
       />
       <Tabs.Screen
         name="customize"
         options={{
           title: 'Customize',
-          tabBarIcon: ({ color }) => <TabIcon emoji="⚙️" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <SlidersHorizontal size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+          ),
         }}
       />
     </Tabs>
   );
 }
 
-function TabIcon({ emoji, color }: { emoji: string; color: any }) {
-  const { Text } = require('react-native');
-  return <Text style={{ fontSize: 22 }}>{emoji}</Text>;
-}

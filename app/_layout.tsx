@@ -33,16 +33,19 @@ function AppBootstrap() {
   useNotificationSync();
   const { palette, colorScheme } = useTheme();
   const { fetchConfig } = useConfigStore();
+  const initAuth = useAuthStore(s => s.initAuth);
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
-  const fetchProfile = useAuthStore(s => s.fetchProfile);
+
+  useEffect(() => {
+    initAuth();
+  }, [initAuth]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchProfile();
       fetchConfig();
       flushQueue();
     }
-  }, [isAuthenticated, fetchConfig, fetchProfile]);
+  }, [isAuthenticated, fetchConfig]);
 
   return (
     <>

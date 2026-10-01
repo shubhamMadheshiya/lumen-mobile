@@ -36,7 +36,7 @@ import { WaterQuantityModal } from '../../src/components/WaterQuantityModal';
 export default function TodayScreen() {
   const { palette } = useTheme();
   const styles = useStyles();
-  const { user } = useAuthStore();
+  const { user, fetchProfile } = useAuthStore();
   const { config, fetchConfig } = useConfigStore();
   const { todaySession, fetchTodaySession } = useDaySessionStore();
   const { todayTaps, fetchTodayTaps } = useQuickLogStore();
@@ -49,13 +49,14 @@ export default function TodayScreen() {
 
   const loadData = useCallback(async () => {
     await Promise.all([
+      fetchProfile(),
       fetchConfig(),
       fetchTodaySession(),
       fetchTodaySummary(),
       fetchReminders(),
       fetchTodayTaps(),
     ]);
-  }, [fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps]);
+  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps]);
 
   useEffect(() => {
     loadData();
@@ -131,8 +132,15 @@ export default function TodayScreen() {
               accessibilityLabel="Open Profile & Settings"
             >
               <Text style={styles.avatarText}>
-                {user?.name
-                  ? user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+                {user?.name?.trim()
+                  ? user.name
+                      .trim()
+                      .split(/\s+/)
+                      .filter(Boolean)
+                      .map((n: string) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()
                   : 'U'}
               </Text>
             </TouchableOpacity>

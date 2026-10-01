@@ -1,12 +1,13 @@
 /**
  * DayView — vertical timeline for a single day.
  * Groups entries into hour buckets; draws a vertical line on the left.
+ * Fully supports Quick Actions, custom units, and entry deletion.
  */
 import React, { useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, ActivityIndicator,
+  View, Text, ActivityIndicator,
 } from 'react-native';
-import { ILogEntry, ICategory, IOption, IQuestion } from '@lumen/shared';
+import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction } from '@lumen/shared';
 import { TimelineItem } from './TimelineItem';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
@@ -17,7 +18,9 @@ interface Props {
   categories: ICategory[];
   questions: IQuestion[];
   options: IOption[];
+  quickActions?: IQuickAction[];
   loading: boolean;
+  onDeleteEntry?: (id: string) => void;
 }
 
 interface HourBucket {
@@ -33,9 +36,19 @@ function toHourLabel(hour: number): string {
   return `${hour - 12} PM`;
 }
 
-export function DayView({ date, entries, categories, questions, options, loading }: Props) {
+export function DayView({
+  date,
+  entries,
+  categories,
+  questions,
+  options,
+  quickActions = [],
+  loading,
+  onDeleteEntry,
+}: Props) {
   const { palette } = useTheme();
   const styles = useStyles();
+
   const buckets = useMemo<HourBucket[]>(() => {
     const map: Record<number, ILogEntry[]> = {};
     entries.forEach(e => {
@@ -74,19 +87,23 @@ export function DayView({ date, entries, categories, questions, options, loading
       <View style={styles.center}>
         <Text style={styles.emptyIcon}>📅</Text>
         <Text style={styles.emptyText}>Nothing logged on {formattedDate}.</Text>
-        <Text style={styles.emptyHint}>Tap + Log on the Home screen to add an entry.</Text>
+        <Text style={styles.emptyHint}>Tap quick actions or + Log on the Home screen to add an entry.</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <Text style={styles.dateLabel}>{formattedDate}</Text>
-      <Text style={styles.countLabel}>{entries.length} {entries.length === 1 ? 'entry' : 'entries'}</Text>
+    <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.dateLabel}>{formattedDate}</Text>
+        <Text style={styles.countBadge}>
+          {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+        </Text>
+      </View>
 
-      {buckets.map(bucket => (
-        <View key={bucket.hour} style={styles.bucket}>
-          {/* Hour label + vertical line */}
+      {buckets.map((bucket, index) => (
+        <View key={bucket.hour} style={[styles.bucket, index === 0 && styles.firstBucket]}>
+          {/* Hour label + horizontal divider line */}
           <View style={styles.hourRow}>
             <View style={styles.hourLabelWrap}>
               <Text style={styles.hourLabel}>{bucket.label}</Text>
@@ -100,6 +117,8 @@ export function DayView({ date, entries, categories, questions, options, loading
               const cat = categories.find(c => c._id === entry.categoryId);
               const q = questions.find(q => q._id === entry.questionId);
               const opts = options.filter(o => entry.answers.some(a => a.optionId === o._id));
+              const qa = quickActions.find(q => q._id === entry.quickActionId);
+
               return (
                 <TimelineItem
                   key={entry._id}
@@ -107,6 +126,8 @@ export function DayView({ date, entries, categories, questions, options, loading
                   category={cat}
                   question={q}
                   options={opts}
+                  quickAction={qa}
+                  onDelete={onDeleteEntry}
                 />
               );
             })}
@@ -114,23 +135,53 @@ export function DayView({ date, entries, categories, questions, options, loading
         </View>
       ))}
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+      <View style={{ height: 32 }} />
+    </View>
   );
 }
 
 const useStyles = createThemedStyles(palette => ({
-  scroll: { padding: 16, paddingBottom: 60 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 10 },
-  emptyIcon: { fontSize: 40 },
-  emptyText: { ...typography.body, color: palette.textSecondary, textAlign: 'center' },
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  center: {
+    padding: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  emptyIcon: { fontSize: 44 },
+  emptyText: { ...typography.body, color: palette.textSecondary, textAlign: 'center', fontWeight: '500' },
   emptyHint: { ...typography.small, color: palette.textDisabled, textAlign: 'center' },
-  dateLabel: { ...typography.h3, color: palette.text, marginBottom: 2 },
-  countLabel: { ...typography.small, color: palette.textSecondary, marginBottom: 16 },
-  bucket: { marginBottom: 12 },
-  hourRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  hourLabelWrap: { width: 54 },
-  hourLabel: { ...typography.caption, color: palette.textDisabled, fontWeight: '700' },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dateLabel: { ...typography.h3, fontSize: 18, color: palette.text, fontWeight: '700' },
+  countBadge: {
+    ...typography.caption,
+    color: palette.primary,
+    backgroundColor: palette.primary + '18',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontWeight: '700',
+  },
+  bucket: { marginBottom: 16 },
+  firstBucket: { marginTop: 4 },
+  hourRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  hourLabelWrap: { minWidth: 62, paddingRight: 8 },
+  hourLabel: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.2,
+  },
   line: { flex: 1, height: 1, backgroundColor: palette.border },
   entriesWrap: { paddingLeft: 4 },
 }));

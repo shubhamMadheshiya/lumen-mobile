@@ -1,0 +1,177 @@
+/**
+ * Lightweight API client — wraps fetch, attaches the JWT access token,
+ * and handles 401 token refresh automatically.
+ */
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+
+// On web (browser on same machine), always use localhost.
+// On native (phone/emulator), use the configured LAN IP from .env.
+const BASE_URL = Platform.OS === 'web'
+  ? 'http://localhost:3000/api/v1'
+  : (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1');
+
+const KEYS = {
+  accessToken:  'lumen_access_token',
+  refreshToken: 'lumen_refresh_token',
+};
+
+// expo-secure-store is native-only; fall back to localStorage on web
+const storage = {
+  async get(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      try { return localStorage.getItem(key); } catch { return null; }
+    }
+    return SecureStore.getItemAsync(key);
+  },
+  async set(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      try { localStorage.setItem(key, value); } catch {}
+      return;
+    }
+    await SecureStore.setItemAsync(key, value);
+  },
+  async delete(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      try { localStorage.removeItem(key); } catch {}
+      return;
+    }
+    await SecureStore.deleteItemAsync(key);
+  },
+};
+
+export async function getAccessToken(): Promise<string | null> {
+  return storage.get(KEYS.accessToken);
+}
+
+export async function saveTokens(accessToken: string, refreshToken: string): Promise<void> {
+  await Promise.all([
+    storage.set(KEYS.accessToken, accessToken),
+    storage.set(KEYS.refreshToken, refreshToken),
+  ]);
+}
+
+export async function clearTokens(): Promise<void> {
+  await Promise.all([
+    storage.delete(KEYS.accessToken),
+    storage.delete(KEYS.refreshToken),
+  ]);
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = await storage.get(KEYS.refreshToken);
+  if (!refreshToken) return null;
+  try {
+    const resp = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json() as { data: { accessToken: string; refreshToken: string } };
+    await saveTokens(json.data.accessToken, json.data.refreshToken);
+    return json.data.accessToken;
+  } catch {
+    return null;
+  }
+}
+
+export async function apiRequest<T = unknown>(
+  path: string,
+  options: RequestInit = {},
+  retry = true,
+): Promise<T> {
+  const token = await getAccessToken();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const resp = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+
+  if (resp.status === 401 && retry) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      return apiRequest<T>(path, options, false);
+    }
+    await clearTokens();
+    throw new ApiError(401, 'Session expired — please log in again');
+  }
+
+  const json = await resp.json() as { success: boolean; data?: T; message?: string; errors?: unknown[] };
+  if (!resp.ok) {
+    throw new ApiError(resp.status, json.message ?? 'Request failed', json.errors);
+  }
+
+  return json.data as T;
+}
+
+export class ApiError extends Error {
+  public readonly statusCode: number;
+  public readonly errors?: unknown[];
+
+  constructor(statusCode: number, message: string, errors?: unknown[]) {
+    super(message);
+    this.statusCode = statusCode;
+    this.errors = errors;
+  }
+}
+
+/**
+ * Download a binary response (PDF, CSV) as a base64 string.
+ * Returns { base64, contentType }.
+ */
+export async function apiDownload(
+  path: string,
+  body: unknown,
+  retry = true,
+): Promise<{ base64: string; contentType: string }> {
+  const token = await getAccessToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/octet-stream, application/pdf, text/csv',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const resp = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (resp.status === 401 && retry) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return apiDownload(path, body, false);
+    await clearTokens();
+    throw new ApiError(401, 'Session expired — please log in again');
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => 'Request failed');
+    throw new ApiError(resp.status, text);
+  }
+
+  const contentType = resp.headers.get('Content-Type') ?? 'application/octet-stream';
+  const arrayBuffer = await resp.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  bytes.forEach(b => { binary += String.fromCharCode(b); });
+  const base64 = btoa(binary);
+  return { base64, contentType };
+}
+
+// Shorthand helpers
+export const api = {
+  get:    <T>(path: string, opts?: { params?: Record<string, unknown> }) => {
+    const qs = opts?.params ? '?' + new URLSearchParams(
+      Object.fromEntries(Object.entries(opts.params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))
+    ).toString() : '';
+    return apiRequest<T>(path + qs);
+  },
+  post:   <T>(path: string, body: unknown)                 => apiRequest<T>(path, { method: 'POST',   body: JSON.stringify(body) }),
+  patch:  <T>(path: string, body: unknown)                 => apiRequest<T>(path, { method: 'PATCH',  body: JSON.stringify(body) }),
+  put:    <T>(path: string, body: unknown)                 => apiRequest<T>(path, { method: 'PUT',    body: JSON.stringify(body) }),
+  delete: <T>(path: string)                                => apiRequest<T>(path, { method: 'DELETE' }),
+};

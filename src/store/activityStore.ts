@@ -1,0 +1,321 @@
+/**
+ * Activity & Walking Tracker Store.
+ * Manages active session lifecycle (Start, Pause, Resume, Stop), hardware sensor subscriptions,
+ * live metrics calculation (distance, pace, speed, steps), and persistence.
+ */
+import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { v4 as uuidv4 } from 'uuid';
+import { IActivitySession, IActivityPoint, ActivityType } from '@lumen/shared';
+import { api } from '../api/client';
+import { locationService } from '../services/locationService';
+
+const SESSIONS_CACHE_KEY = 'lumen:activity:history_v1';
+
+export interface WalkingSummaryStats {
+  period: string;
+  count: number;
+  totalDistanceMeters: number;
+  totalDistanceKm: number;
+  totalDurationSeconds: number;
+  totalDurationMinutes: number;
+  totalSteps: number;
+  averagePaceMinPerKm: number;
+  averageSpeedKmh: number;
+}
+
+interface ActivityState {
+  // Active session live state
+  activeSession: IActivitySession | null;
+  isTracking: boolean;
+  isPaused: boolean;
+  activeSeconds: number;
+  distanceMeters: number;
+  steps: number;
+  currentSpeedKmh: number;
+  averagePaceMinPerKm: number;
+  routePoints: IActivityPoint[];
+
+  // Historical data & daily aggregates
+  history: IActivitySession[];
+  todaySummary: WalkingSummaryStats | null;
+  isLoading: boolean;
+  error: string | null;
+
+  // Actions
+  startWalking: (title?: string) => Promise<boolean>;
+  pauseWalking: () => Promise<void>;
+  resumeWalking: () => Promise<void>;
+  stopWalking: (notes?: string) => Promise<IActivitySession | null>;
+  discardWalking: () => Promise<void>;
+
+  fetchHistory: () => Promise<void>;
+  fetchTodaySummary: () => Promise<void>;
+}
+
+let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+export const useActivityStore = create<ActivityState>((set, get) => ({
+  activeSession: null,
+  isTracking: false,
+  isPaused: false,
+  activeSeconds: 0,
+  distanceMeters: 0,
+  steps: 0,
+  currentSpeedKmh: 0,
+  averagePaceMinPerKm: 0,
+  routePoints: [],
+
+  history: [],
+  todaySummary: null,
+  isLoading: false,
+  error: null,
+
+  startWalking: async (title: string = 'Outdoor Walk') => {
+    const clientId = uuidv4();
+    const startTime = new Date().toISOString();
+
+    const initialSession: IActivitySession = {
+      _id: clientId,
+      clientId,
+      userId: '',
+      activityType: 'WALKING',
+      title,
+      status: 'ACTIVE',
+      startTime,
+      totalDurationSeconds: 0,
+      activeDurationSeconds: 0,
+      distanceMeters: 0,
+      steps: 0,
+      hasRouteData: false,
+      createdAt: startTime,
+      updatedAt: startTime,
+    };
+
+    set({
+      activeSession: initialSession,
+      isTracking: true,
+      isPaused: false,
+      activeSeconds: 0,
+      distanceMeters: 0,
+      steps: 0,
+      currentSpeedKmh: 0,
+      averagePaceMinPerKm: 0,
+      routePoints: [],
+    });
+
+    // Start live hardware tracking
+    const trackingStarted = await locationService.startTracking(
+      (point, totalDistanceMeters, currentSpeedKmh) => {
+        const { activeSeconds } = get();
+        const distKm = totalDistanceMeters / 1000;
+        const avgPace = distKm > 0.05 && activeSeconds > 10 ? (activeSeconds / 60) / distKm : 0;
+
+        set(state => ({
+          distanceMeters: totalDistanceMeters,
+          currentSpeedKmh,
+          averagePaceMinPerKm: avgPace,
+          routePoints: [...state.routePoints, point],
+        }));
+      },
+      (steps) => {
+        set({ steps });
+      }
+    );
+
+    if (!trackingStarted) {
+      console.warn('[activityStore] Hardware location tracking unavailable.');
+    }
+
+    // Start elapsed active time ticker
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      if (!get().isPaused && get().isTracking) {
+        set(state => {
+          const nextSec = state.activeSeconds + 1;
+          const distKm = state.distanceMeters / 1000;
+          const pace = distKm > 0.05 && nextSec > 10 ? (nextSec / 60) / distKm : 0;
+          return {
+            activeSeconds: nextSec,
+            averagePaceMinPerKm: pace,
+          };
+        });
+      }
+    }, 1000);
+
+    // Initial server call (non-blocking)
+    api.post<IActivitySession>('/activity-sessions', {
+      clientId,
+      activityType: 'WALKING',
+      title,
+      startTime,
+    }).then(serverSession => {
+      if (serverSession && serverSession._id) {
+        set(state => ({
+          activeSession: state.activeSession ? { ...state.activeSession, _id: serverSession._id } : null,
+        }));
+      }
+    }).catch(() => {});
+
+    return true;
+  },
+
+  pauseWalking: async () => {
+    if (!get().isTracking || get().isPaused) return;
+    set({ isPaused: true, currentSpeedKmh: 0 });
+    await locationService.pauseTracking();
+
+    const session = get().activeSession;
+    if (session) {
+      api.post(`/activity-sessions/${session._id}/pause`, {
+        activeDurationSeconds: get().activeSeconds,
+        distanceMeters: get().distanceMeters,
+        steps: get().steps,
+      }).catch(() => {});
+    }
+  },
+
+  resumeWalking: async () => {
+    if (!get().isTracking || !get().isPaused) return;
+    set({ isPaused: false });
+    await locationService.resumeTracking(
+      (point, totalDistanceMeters, currentSpeedKmh) => {
+        const { activeSeconds } = get();
+        const distKm = totalDistanceMeters / 1000;
+        const avgPace = distKm > 0.05 && activeSeconds > 10 ? (activeSeconds / 60) / distKm : 0;
+        set(state => ({
+          distanceMeters: totalDistanceMeters,
+          currentSpeedKmh,
+          averagePaceMinPerKm: avgPace,
+          routePoints: [...state.routePoints, point],
+        }));
+      },
+      (steps) => set({ steps })
+    );
+
+    const session = get().activeSession;
+    if (session) {
+      api.post(`/activity-sessions/${session._id}/resume`, {}).catch(() => {});
+    }
+  },
+
+  stopWalking: async (notes?: string) => {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+
+    const { distanceMeters: finalDistance, steps: finalSteps } = await locationService.stopTracking();
+    const { activeSession, activeSeconds, distanceMeters, averagePaceMinPerKm, routePoints } = get();
+
+    if (!activeSession) return null;
+
+    const endTime = new Date().toISOString();
+    const distKm = Math.max(distanceMeters, finalDistance) / 1000;
+    const avgSpeed = activeSeconds > 0 ? distKm / (activeSeconds / 3600) : 0;
+
+    const completedSession: IActivitySession = {
+      ...activeSession,
+      status: 'COMPLETED',
+      endTime,
+      activeDurationSeconds: activeSeconds,
+      totalDurationSeconds: activeSeconds,
+      distanceMeters: Math.max(distanceMeters, finalDistance),
+      steps: Math.max(get().steps, finalSteps),
+      averageSpeedKmh: Number(avgSpeed.toFixed(2)),
+      averagePaceMinPerKm: Number(averagePaceMinPerKm.toFixed(2)),
+      hasRouteData: routePoints.length > 0,
+      routePoints: routePoints.slice(0, 300), // Cap route points
+      notes,
+      updatedAt: endTime,
+    };
+
+    // Reset live state and append to history
+    set(state => ({
+      activeSession: null,
+      isTracking: false,
+      isPaused: false,
+      activeSeconds: 0,
+      distanceMeters: 0,
+      steps: 0,
+      currentSpeedKmh: 0,
+      averagePaceMinPerKm: 0,
+      routePoints: [],
+      history: [completedSession, ...state.history],
+    }));
+
+    // Cache updated history
+    AsyncStorage.setItem(SESSIONS_CACHE_KEY, JSON.stringify(get().history)).catch(() => {});
+
+    // Sync to backend and create Timeline LogEntry
+    try {
+      await api.post(`/activity-sessions/${completedSession._id}/stop`, {
+        endTime,
+        totalDurationSeconds: activeSeconds,
+        activeDurationSeconds: activeSeconds,
+        distanceMeters: completedSession.distanceMeters,
+        steps: completedSession.steps,
+        averageSpeedKmh: completedSession.averageSpeedKmh,
+        averagePaceMinPerKm: completedSession.averagePaceMinPerKm,
+        routePoints: completedSession.routePoints,
+        notes,
+        createTimelineLog: true,
+      });
+
+      get().fetchTodaySummary().catch(() => {});
+    } catch (e) {
+      console.warn('[activityStore] Failed to sync stopped session:', e);
+    }
+
+    return completedSession;
+  },
+
+  discardWalking: async () => {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    await locationService.stopTracking();
+
+    set({
+      activeSession: null,
+      isTracking: false,
+      isPaused: false,
+      activeSeconds: 0,
+      distanceMeters: 0,
+      steps: 0,
+      currentSpeedKmh: 0,
+      averagePaceMinPerKm: 0,
+      routePoints: [],
+    });
+  },
+
+  fetchHistory: async () => {
+    set({ isLoading: true });
+    try {
+      const cached = await AsyncStorage.getItem(SESSIONS_CACHE_KEY);
+      if (cached) {
+        set({ history: JSON.parse(cached) });
+      }
+    } catch {}
+
+    try {
+      const serverSessions = await api.get<IActivitySession[]>('/activity-sessions?activityType=WALKING&limit=50');
+      if (Array.isArray(serverSessions)) {
+        set({ history: serverSessions, isLoading: false });
+        AsyncStorage.setItem(SESSIONS_CACHE_KEY, JSON.stringify(serverSessions)).catch(() => {});
+      }
+    } catch (err: any) {
+      set({ isLoading: false, error: err?.message || 'Failed to fetch history' });
+    }
+  },
+
+  fetchTodaySummary: async () => {
+    try {
+      const summary = await api.get<WalkingSummaryStats>('/activity-sessions/walking/summary?period=today');
+      if (summary) {
+        set({ todaySummary: summary });
+      }
+    } catch {}
+  },
+}));

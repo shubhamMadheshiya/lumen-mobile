@@ -1,0 +1,201 @@
+/**
+ * Morning / evening check-in modal.
+ * Filters questions by frequency ('morning' | 'evening') across all active categories.
+ * Submitted as source: 'check_in'.
+ */
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  ActivityIndicator, Alert, Platform,
+} from 'react-native';
+import { v4 as uuidv4 } from 'uuid';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { IQuestion, IOption, Answer, QuestionFrequency } from '@lumen/shared';
+import { useConfigStore } from '../src/store/configStore';
+import { useDaySessionStore } from '../src/store/daySessionStore';
+import { useAuthStore } from '../src/store/authStore';
+import { api } from '../src/api/client';
+import { uploadAnswerImages } from '../src/utils/uploadAnswerImages';
+import { palette } from '../src/theme/colors';
+import { typography } from '../src/theme/typography';
+import { QuestionCard } from '../src/components/QuestionCard';
+
+const META: Record<string, { emoji: string; title: string; subtitle: string }> = {
+  morning: {
+    emoji: '☀️',
+    title: 'Morning check-in',
+    subtitle: 'How are you feeling as you start your day?',
+  },
+  evening: {
+    emoji: '🌙',
+    title: 'Evening check-in',
+    subtitle: 'A quick look back before you rest.',
+  },
+};
+
+export default function CheckInModal() {
+  const { type = 'morning' } = useLocalSearchParams<{ type: string }>();
+  const { config } = useConfigStore();
+  const { todaySession } = useDaySessionStore();
+  const { user } = useAuthStore();
+
+  const [answersByQuestion, setAnswersByQuestion] = useState<Record<string, Answer[]>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const meta = META[type] ?? META.morning!;
+  const freq: QuestionFrequency = type === 'evening' ? 'evening' : 'morning';
+  const tempPrefUnit = user?.preferences.tempUnit ?? 'C';
+
+  const questions: IQuestion[] = (config?.questions ?? [])
+    .filter(q => q.isActive && (q.frequency === freq || q.frequency === 'anytime'))
+    .sort((a, b) => a.order - b.order)
+    .slice(0, 8); // limit check-in to 8 questions
+
+  const optionsByQuestion: Record<string, IOption[]> = {};
+  for (const q of questions) {
+    optionsByQuestion[q._id] = (config?.options ?? [])
+      .filter(o => o.questionId === q._id && o.isActive)
+      .sort((a, b) => a.order - b.order);
+  }
+
+  const allAnswers = Object.values(answersByQuestion).flat();
+
+  const setQAnswers = useCallback(
+    (qId: string, ans: Answer[]) =>
+      setAnswersByQuestion(prev => ({ ...prev, [qId]: ans })),
+    [],
+  );
+
+  const handleSkip = () => router.back();
+
+  const handleSubmit = async () => {
+    if (allAnswers.length === 0) { router.back(); return; }
+
+    setIsSubmitting(true);
+    try {
+      const uploadedAnswers = await uploadAnswerImages(allAnswers);
+      await api.post('/logs', {
+        clientId: uuidv4(),
+        daySessionId: todaySession?._id,
+        source: 'check_in',
+        occurredAt: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        answers: uploadedAnswers,
+      });
+      router.back();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Check-in failed';
+      Alert.alert('Error', msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={styles.screen}>
+      <Stack.Screen
+        options={{
+          presentation: 'modal',
+          headerShown: true,
+          title: '',
+          headerStyle: { backgroundColor: palette.surface },
+          headerTintColor: palette.primary,
+          headerShadowVisible: false,
+        }}
+      />
+
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Hero header */}
+        <View style={styles.hero}>
+          <Text style={styles.heroEmoji}>{meta.emoji}</Text>
+          <Text style={styles.heroTitle}>{meta.title}</Text>
+          <Text style={styles.heroSubtitle}>{meta.subtitle}</Text>
+        </View>
+
+        {questions.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No check-in questions configured yet.</Text>
+            <Text style={styles.emptyHint}>
+              Go to Customize → Questions and set frequency to "{freq}" on any question.
+            </Text>
+          </View>
+        ) : (
+          questions.map((q) => (
+            <QuestionCard
+              key={q._id}
+              question={q}
+              options={optionsByQuestion[q._id] ?? []}
+              answers={answersByQuestion[q._id] ?? []}
+              sessionAnswers={allAnswers}
+              onChange={(ans) => setQAnswers(q._id, ans)}
+              tempPrefUnit={tempPrefUnit}
+            />
+          ))
+        )}
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      {/* Footer buttons */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.skipBtn}
+          onPress={handleSkip}
+          accessibilityRole="button"
+          accessibilityLabel="Skip check-in"
+        >
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+          accessibilityRole="button"
+          accessibilityLabel="Save check-in"
+        >
+          {isSubmitting
+            ? <ActivityIndicator color={palette.white} />
+            : <Text style={styles.submitText}>Save check-in</Text>}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: palette.background },
+  scroll: { padding: 16, gap: 14 },
+  hero: {
+    alignItems: 'center', paddingVertical: 20, gap: 6,
+  },
+  heroEmoji: { fontSize: 48 },
+  heroTitle: { ...typography.h2, color: palette.text, textAlign: 'center' },
+  heroSubtitle: { ...typography.body, color: palette.textSecondary, textAlign: 'center', maxWidth: 300 },
+  emptyCard: {
+    backgroundColor: palette.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: palette.border,
+    padding: 20, alignItems: 'center', gap: 6,
+  },
+  emptyText: { ...typography.body, color: palette.textSecondary, textAlign: 'center' },
+  emptyHint: { ...typography.small, color: palette.textDisabled, textAlign: 'center' },
+  footer: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', gap: 10,
+    padding: 16, paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+    backgroundColor: palette.surface, borderTopWidth: 1, borderTopColor: palette.border,
+  },
+  skipBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 14,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1, borderColor: palette.border,
+    alignItems: 'center',
+  },
+  skipText: { ...typography.button, color: palette.textSecondary },
+  submitBtn: {
+    flex: 2, backgroundColor: palette.primary,
+    borderRadius: 14, paddingVertical: 14,
+    alignItems: 'center', justifyContent: 'center', minHeight: 52,
+  },
+  submitBtnDisabled: { opacity: 0.6 },
+  submitText: { ...typography.button, color: palette.white },
+});

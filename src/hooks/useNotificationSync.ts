@@ -3,6 +3,7 @@
  * Sets up action categories and handles user action button taps.
  */
 import { useEffect } from 'react';
+import { router } from 'expo-router';
 import { useReminderStore } from '../store/reminderStore';
 import {
   syncReminders,
@@ -47,6 +48,10 @@ export function useNotificationSync() {
     const receivedSub = typeof N.addNotificationReceivedListener === 'function'
       ? N.addNotificationReceivedListener((notification: any) => {
           console.log('[Notifications] Notification triggered:', notification.request?.identifier);
+          const reminderId = notification.request?.content?.data?.reminderId;
+          if (reminderId) {
+            router.push(`/alarm/${reminderId}`);
+          }
         })
       : null;
 

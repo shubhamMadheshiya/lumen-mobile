@@ -39,6 +39,10 @@ module.exports = {
         'VIBRATE',
         'POST_NOTIFICATIONS',
         'SCHEDULE_EXACT_ALARM',
+        'USE_EXACT_ALARM',
+        'USE_FULL_SCREEN_INTENT',
+        'WAKE_LOCK',
+        'SYSTEM_ALERT_WINDOW',
       ],
     },
     web: {

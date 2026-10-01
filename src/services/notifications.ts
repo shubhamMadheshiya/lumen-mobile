@@ -32,7 +32,7 @@ try {
 }
 
 const MAPPING_KEY = 'lumen:notif:mapping_v2'; // { reminderId: string[] (notificationIds) }
-const CHANNEL_ID = 'lumen-reminders-v2';
+const CHANNEL_ID = 'lumen-reminders-v3';
 
 export const NOTIF_CATEGORIES = {
   WATER: 'lumen_category_water',
@@ -95,12 +95,19 @@ export async function ensureNotificationChannel(): Promise<void> {
       name: 'Lumen Reminders & Alarms',
       description: 'Daily and scheduled alarms for hydration, medications, and wellness checks',
       importance: N.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
+      vibrationPattern: [0, 500, 250, 500, 250, 500],
       sound: 'default',
       enableLights: true,
       enableVibrate: true,
       lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
-      bypassDnd: false,
+      bypassDnd: true,
+      audioAttributes: {
+        usage: N.AndroidAudioUsage.ALARM,
+        contentType: N.AndroidAudioContentType.SONIFICATION,
+        flags: {
+          enforceAudibility: true,
+        },
+      },
     });
   } catch (err) {
     console.warn('[Notifications] Failed to ensure Android notification channel:', err);
@@ -403,7 +410,7 @@ export async function sendTestReminderNotification(): Promise<boolean> {
         priority: 'max',
         vibrate: [0, 250, 250, 250],
         categoryIdentifier: NOTIF_CATEGORIES.WATER,
-        data: { test: true },
+        data: { test: true, reminderId: 'test_alarm' },
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
       trigger: {
@@ -540,8 +547,10 @@ export async function handleNotificationActionResponse(response: any): Promise<v
       break;
 
     default:
-      // Default notification body tap
-      if (data.linkedQuickActionId) {
+      // Default notification body tap -> opens the dedicated full-screen alarm interface
+      if (reminderId) {
+        router.push(`/alarm/${reminderId}`);
+      } else if (data.linkedQuickActionId) {
         router.push('/(tabs)/today');
       }
       break;

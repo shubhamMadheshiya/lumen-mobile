@@ -1,8 +1,10 @@
 /**
  * Production Notification & Reminder Service for Lumen.
- * - Manages local notification scheduling (One-time, Daily, Weekly, Custom Days, Interval, Snooze).
+ * - Manages local notification scheduling (One-time, Daily, Weekly, Custom Days, Interval, Inactivity, Snooze).
  * - Interactive action categories (Water quick log, Start walking, Stand up, Bedtime).
  * - Background action response handling that integrates directly into the Tracking Engine.
+ * - Guaranteed Android notification channel initialization with High Importance & Sound.
+ * - Test alarm function for instant verification.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -21,13 +23,16 @@ try {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
     }),
   });
 } catch {
-  // Graceful fallback for Expo Go / mock environments
+  // Graceful fallback for environments where expo-notifications is not available
 }
 
 const MAPPING_KEY = 'lumen:notif:mapping_v2'; // { reminderId: string[] (notificationIds) }
+const CHANNEL_ID = 'lumen-reminders-v2';
 
 export const NOTIF_CATEGORIES = {
   WATER: 'lumen_category_water',
@@ -80,28 +85,53 @@ export async function setupNotificationCategories(): Promise<void> {
 }
 
 /**
- * Request notification permissions.
+ * Ensure the Android notification channel exists with MAX importance, vibration, sound, and lights.
+ * Required for Android 8.0+ (API 26+) for audible reminder alarms.
+ */
+export async function ensureNotificationChannel(): Promise<void> {
+  if (!N || Platform.OS !== 'android' || typeof N.setNotificationChannelAsync !== 'function') return;
+  try {
+    await N.setNotificationChannelAsync(CHANNEL_ID, {
+      name: 'Lumen Reminders & Alarms',
+      description: 'Daily and scheduled alarms for hydration, medications, and wellness checks',
+      importance: N.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      sound: 'default',
+      enableLights: true,
+      enableVibrate: true,
+      lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: false,
+    });
+  } catch (err) {
+    console.warn('[Notifications] Failed to ensure Android notification channel:', err);
+  }
+}
+
+/**
+ * Request notification permissions and register the Android channel.
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
   if (!N) return false;
   try {
+    await ensureNotificationChannel();
+
     const { status: existing } = await N.getPermissionsAsync();
     if (existing === 'granted') {
       await setupNotificationCategories();
       return true;
     }
-    const { status } = await N.requestPermissionsAsync();
+
+    const { status } = await N.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
+
     if (status !== 'granted') return false;
 
-    if (Platform.OS === 'android') {
-      await N.setNotificationChannelAsync('lumen-reminders-v2', {
-        name: 'Lumen Reminders',
-        importance: N.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        sound: 'default',
-      });
-    }
-
+    await ensureNotificationChannel();
     await setupNotificationCategories();
     return true;
   } catch {
@@ -144,12 +174,24 @@ function resolveCategory(category: string): string {
   }
 }
 
+function parseTime(timeStr?: string, defaultH = 9, defaultM = 0): { hour: number; minute: number } {
+  if (!timeStr) return { hour: defaultH, minute: defaultM };
+  const parts = timeStr.split(':');
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  return {
+    hour: isNaN(h) ? defaultH : Math.min(23, Math.max(0, h)),
+    minute: isNaN(m) ? defaultM : Math.min(59, Math.max(0, m)),
+  };
+}
+
 /**
- * Schedule a generic or specific reminder rule into native notification triggers.
+ * Schedule a reminder into native notification triggers with sound, vibration, and channels.
  */
 export async function scheduleReminder(reminder: IReminder): Promise<void> {
   if (!N) return;
 
+  await ensureNotificationChannel();
   const map = await loadMapping();
 
   // Cancel any existing scheduled notifications for this reminder ID
@@ -160,8 +202,8 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     delete map[reminder._id];
   }
 
-  // If reminder is disabled, save cleared mapping and exit
-  if (!reminder.enabled && reminder.isActive !== true) {
+  // If reminder is disabled or archived, save cleared mapping and exit
+  if ((!reminder.enabled && reminder.isActive !== true) || !!reminder.archivedAt) {
     await saveMapping(map);
     return;
   }
@@ -169,101 +211,104 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
   const categoryId = resolveCategory(reminder.category);
   const scheduledIds: string[] = [];
 
+  const commonContent = {
+    title: reminder.notificationTitle || reminder.name,
+    body: reminder.notificationMessage || reminder.message || 'Scheduled Reminder',
+    data: { reminderId: reminder._id, linkedQuickActionId: reminder.linkedQuickActionId },
+    categoryIdentifier: categoryId,
+    sound: 'default',
+    priority: 'max',
+    vibrate: [0, 250, 250, 250],
+    ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+  };
+
   try {
     const scheduleType = reminder.scheduleType || 'DAILY';
 
     // 1. ONE-TIME
     if (scheduleType === 'ONE_TIME' && (reminder.targetDate || reminder.targetTime)) {
       const dateStr = reminder.targetDate || new Date().toISOString().slice(0, 10);
-      const timeStr = reminder.targetTime || '09:00';
-      const targetDate = new Date(`${dateStr}T${timeStr}:00`);
+      const { hour, minute } = parseTime(reminder.targetTime, 9, 0);
+      const targetDate = new Date(`${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
 
-      if (targetDate.getTime() > Date.now()) {
-        const id = await N.scheduleNotificationAsync({
-          content: {
-            title: reminder.notificationTitle || reminder.name,
-            body: reminder.notificationMessage || reminder.message || 'Scheduled Reminder',
-            data: { reminderId: reminder._id, linkedQuickActionId: reminder.linkedQuickActionId },
-            categoryIdentifier: categoryId,
-            ...(Platform.OS === 'android' ? { channelId: 'lumen-reminders-v2' } : {}),
-          },
-          trigger: targetDate,
-        });
-        scheduledIds.push(id);
+      // If time has passed today, schedule for tomorrow
+      if (targetDate.getTime() <= Date.now()) {
+        targetDate.setDate(targetDate.getDate() + 1);
       }
+
+      const id = await N.scheduleNotificationAsync({
+        content: commonContent,
+        trigger: {
+          type: N.SchedulableTriggerInputTypes.DATE,
+          date: targetDate,
+          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+        },
+      });
+      scheduledIds.push(id);
     }
     // 2. DAILY
     else if (scheduleType === 'DAILY' || (reminder.type === 'time' && reminder.schedule)) {
-      const timeStr = reminder.targetTime || reminder.schedule || '09:00';
-      const [hStr, mStr] = timeStr.split(':');
-      const hour = parseInt(hStr, 10) || 9;
-      const minute = parseInt(mStr, 10) || 0;
+      const { hour, minute } = parseTime(reminder.targetTime || reminder.schedule, 9, 0);
 
       const id = await N.scheduleNotificationAsync({
-        content: {
-          title: reminder.notificationTitle || reminder.name,
-          body: reminder.notificationMessage || reminder.message || 'Scheduled Reminder',
-          data: { reminderId: reminder._id, linkedQuickActionId: reminder.linkedQuickActionId },
-          categoryIdentifier: categoryId,
-          ...(Platform.OS === 'android' ? { channelId: 'lumen-reminders-v2' } : {}),
-        },
+        content: commonContent,
         trigger: {
+          type: N.SchedulableTriggerInputTypes.DAILY,
           hour,
           minute,
           repeats: true,
-          type: N.SchedulableTriggerInputTypes.DAILY,
+          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
         },
       });
       scheduledIds.push(id);
     }
     // 3. WEEKLY / CUSTOM DAYS
     else if ((scheduleType === 'WEEKLY' || scheduleType === 'CUSTOM_DAYS') && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
-      const [hStr, mStr] = (reminder.targetTime || '09:00').split(':');
-      const hour = parseInt(hStr, 10) || 9;
-      const minute = parseInt(mStr, 10) || 0;
+      const { hour, minute } = parseTime(reminder.targetTime, 9, 0);
 
       for (const day of reminder.daysOfWeek) {
         const weekday = WEEKDAY_TO_NUMBER[day] || 2;
         const id = await N.scheduleNotificationAsync({
           content: {
-            title: reminder.notificationTitle || reminder.name,
+            ...commonContent,
             body: reminder.notificationMessage || 'Time for your scheduled routine',
-            data: { reminderId: reminder._id, linkedQuickActionId: reminder.linkedQuickActionId },
-            categoryIdentifier: categoryId,
-            ...(Platform.OS === 'android' ? { channelId: 'lumen-reminders-v2' } : {}),
           },
           trigger: {
+            type: N.SchedulableTriggerInputTypes.WEEKLY,
             weekday,
             hour,
             minute,
             repeats: true,
-            type: N.SchedulableTriggerInputTypes.WEEKLY,
+            ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
           },
         });
         scheduledIds.push(id);
       }
     }
-    // 4. INTERVAL (e.g. 08:00 to 22:00 every 60m)
+    // 4. INTERVAL (e.g. 08:00 to 22:00 every X minutes)
     else if (scheduleType === 'INTERVAL') {
-      const interval = reminder.intervalMinutes || 60;
-      const startH = parseInt((reminder.windowStartTime || '08:00').split(':')[0], 10) || 8;
-      const endH = parseInt((reminder.windowEndTime || '22:00').split(':')[0], 10) || 22;
+      const intervalMin = Math.max(15, reminder.intervalMinutes || 60);
+      const { hour: startH, minute: startM } = parseTime(reminder.windowStartTime, 8, 0);
+      const { hour: endH, minute: endM } = parseTime(reminder.windowEndTime, 22, 0);
 
-      // Project intervals for the day
-      for (let h = startH; h <= endH; h += Math.max(1, Math.floor(interval / 60))) {
+      const startTotalMinutes = startH * 60 + startM;
+      const endTotalMinutes = endH * 60 + endM;
+
+      for (let m = startTotalMinutes; m <= endTotalMinutes; m += intervalMin) {
+        const slotHour = Math.floor(m / 60);
+        const slotMinute = m % 60;
+
         const id = await N.scheduleNotificationAsync({
           content: {
-            title: reminder.notificationTitle || reminder.name,
+            ...commonContent,
             body: reminder.notificationMessage || 'Hydration & Movement check-in',
-            data: { reminderId: reminder._id, linkedQuickActionId: reminder.linkedQuickActionId },
-            categoryIdentifier: categoryId,
-            ...(Platform.OS === 'android' ? { channelId: 'lumen-reminders-v2' } : {}),
           },
           trigger: {
-            hour: h,
-            minute: 0,
-            repeats: true,
             type: N.SchedulableTriggerInputTypes.DAILY,
+            hour: slotHour,
+            minute: slotMinute,
+            repeats: true,
+            ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
           },
         });
         scheduledIds.push(id);
@@ -271,24 +316,21 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     }
     // 5. INACTIVITY / STAND
     else if (scheduleType === 'INACTIVITY' || reminder.type === 'inactivity') {
-      const hours = reminder.inactivityThresholdMinutes
-        ? reminder.inactivityThresholdMinutes / 60
-        : (reminder.inactivityMinutes ? reminder.inactivityMinutes / 60 : 1);
+      const thresholdMinutes = reminder.inactivityThresholdMinutes || reminder.inactivityMinutes || 45;
+      const seconds = Math.max(60, thresholdMinutes * 60);
 
-      const d = new Date(Date.now() + Math.max(1, hours) * 3600 * 1000);
       const id = await N.scheduleNotificationAsync({
         content: {
+          ...commonContent,
           title: reminder.notificationTitle || 'Time to Stand & Move',
           body: reminder.notificationMessage || 'You’ve been resting for a while. Take a light movement break.',
-          data: { reminderId: reminder._id, linkedQuickActionId: reminder.linkedQuickActionId },
           categoryIdentifier: NOTIF_CATEGORIES.STAND,
-          ...(Platform.OS === 'android' ? { channelId: 'lumen-reminders-v2' } : {}),
         },
         trigger: {
-          hour: d.getHours(),
-          minute: d.getMinutes(),
+          type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds,
           repeats: true,
-          type: N.SchedulableTriggerInputTypes.DAILY,
+          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
         },
       });
       scheduledIds.push(id);
@@ -305,7 +347,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
 }
 
 /**
- * Snooze a reminder by scheduling a one-shot notification in X minutes.
+ * Snooze a reminder by scheduling an audible notification in X minutes.
  */
 export async function snoozeReminder(
   reminderId: string,
@@ -315,7 +357,7 @@ export async function snoozeReminder(
 ): Promise<void> {
   if (!N) return;
 
-  const snoozeDate = new Date(Date.now() + snoozeMinutes * 60 * 1000);
+  await ensureNotificationChannel();
 
   try {
     await N.scheduleNotificationAsync({
@@ -323,9 +365,17 @@ export async function snoozeReminder(
         title: title ? `⏱ (Snoozed) ${title}` : '⏱ Reminder Snoozed',
         body: message || `Snoozed for ${snoozeMinutes} minutes`,
         data: { reminderId, isSnoozed: true },
-        ...(Platform.OS === 'android' ? { channelId: 'lumen-reminders-v2' } : {}),
+        sound: 'default',
+        priority: 'max',
+        vibrate: [0, 250, 250, 250],
+        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
-      trigger: snoozeDate,
+      trigger: {
+        type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(1, snoozeMinutes * 60),
+        repeats: false,
+        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+      },
     });
 
     // Notify backend
@@ -336,12 +386,95 @@ export async function snoozeReminder(
 }
 
 /**
- * Cancels a reminder by ID.
+ * Fires a test notification in 3 seconds so the user can verify sound and banner.
+ */
+export async function sendTestReminderNotification(): Promise<boolean> {
+  if (!N) return false;
+
+  await requestNotificationPermissions();
+  await ensureNotificationChannel();
+
+  try {
+    await N.scheduleNotificationAsync({
+      content: {
+        title: '🔔 Lumen Alarm Test',
+        body: 'Your reminder alarms, sound, and notifications are working properly! 🎉',
+        sound: 'default',
+        priority: 'max',
+        vibrate: [0, 250, 250, 250],
+        categoryIdentifier: NOTIF_CATEGORIES.WATER,
+        data: { test: true },
+        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+      },
+      trigger: {
+        type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 3,
+        repeats: false,
+        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+      },
+    });
+    return true;
+  } catch (err) {
+    console.error('[Notifications] Failed to send test notification:', err);
+    return false;
+  }
+}
+
+/**
+ * Diagnostic check of notification and alarm system.
+ */
+export async function checkNotificationAlarmStatus(): Promise<{
+  isSupported: boolean;
+  hasPermission: boolean;
+  channelConfigured: boolean;
+  scheduledCount: number;
+}> {
+  if (!N) {
+    return {
+      isSupported: false,
+      hasPermission: false,
+      channelConfigured: false,
+      scheduledCount: 0,
+    };
+  }
+
+  try {
+    const { status } = await N.getPermissionsAsync();
+    const hasPermission = status === 'granted';
+
+    let channelConfigured = true;
+    if (Platform.OS === 'android' && typeof N.getNotificationChannelAsync === 'function') {
+      const channel = await N.getNotificationChannelAsync(CHANNEL_ID);
+      channelConfigured = !!channel;
+    }
+
+    const scheduled = typeof N.getAllScheduledNotificationsAsync === 'function'
+      ? await N.getAllScheduledNotificationsAsync()
+      : [];
+
+    return {
+      isSupported: true,
+      hasPermission,
+      channelConfigured,
+      scheduledCount: scheduled.length,
+    };
+  } catch {
+    return {
+      isSupported: true,
+      hasPermission: false,
+      channelConfigured: false,
+      scheduledCount: 0,
+    };
+  }
+}
+
+/**
+ * Cancels all scheduled native notifications for a given reminder ID.
  */
 export async function cancelReminder(reminderId: string): Promise<void> {
   const map = await loadMapping();
   if (map[reminderId] && Array.isArray(map[reminderId])) {
-    if (N) {
+    if (N && typeof N.cancelScheduledNotificationAsync === 'function') {
       for (const id of map[reminderId]) {
         await N.cancelScheduledNotificationAsync(id).catch(() => {});
       }
@@ -376,7 +509,6 @@ export async function handleNotificationActionResponse(response: any): Promise<v
 
     case NOTIF_ACTIONS.LOG_500ML:
       if (data.linkedQuickActionId) {
-        // Log twice or log 500ml directly
         useQuickLogStore.getState().tap(data.linkedQuickActionId);
       }
       break;

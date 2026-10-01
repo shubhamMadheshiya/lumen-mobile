@@ -8,7 +8,7 @@ import {
 import { Stack } from 'expo-router';
 import { api } from '../../src/api/client';
 import { useConfigStore } from '../../src/store/configStore';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import type {
   TemplateCategory, TemplateQuickAction, ConditionBundle,
@@ -32,6 +32,8 @@ interface TemplatesResponse {
 }
 
 export default function TemplatesScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { invalidate, fetchConfig } = useConfigStore();
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [applied, setApplied] = useState<Set<string>>(new Set());
@@ -185,7 +187,7 @@ export default function TemplatesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { padding: 16, paddingBottom: 40 },
@@ -216,4 +218,4 @@ const styles = StyleSheet.create({
   cardMeta: { ...typography.caption, color: palette.textDisabled, marginTop: 3 },
   addBtn: { ...typography.bodyBold, color: palette.primary, paddingHorizontal: 4 },
   checkmark: { ...typography.h4, color: palette.success },
-});
+}));

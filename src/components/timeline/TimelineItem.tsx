@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ILogEntry, ICategory, IOption, IQuestion } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -51,6 +51,8 @@ function renderFieldValue(value: unknown, dataType: string, unit?: string): stri
 }
 
 export function TimelineItem({ entry, category, question, options, onPress }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [expanded, setExpanded] = useState(false);
   const accentColor = category?.color ?? palette.primary;
 
@@ -132,7 +134,7 @@ export function TimelineItem({ entry, category, question, options, onPress }: Pr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   card: { flexDirection: 'row', backgroundColor: palette.surface, borderRadius: 14, borderWidth: 1, borderColor: palette.border, overflow: 'hidden', marginBottom: 8 },
   strip: { width: 4 },
   body: { flex: 1, padding: 12, gap: 6 },
@@ -153,4 +155,4 @@ const styles = StyleSheet.create({
   fieldList: { gap: 2 },
   fieldDetail: { ...typography.small, color: palette.textSecondary },
   note: { ...typography.small, color: palette.textSecondary, fontStyle: 'italic' },
-});
+}));

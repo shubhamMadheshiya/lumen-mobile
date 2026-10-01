@@ -4,13 +4,15 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useAuthStore } from '../../src/store/authStore';
 import { ApiError } from '../../src/api/client';
 import { useGoogleAuth } from '../../src/hooks/useGoogleAuth';
 
 export default function LoginScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoading: authLoading } = useAuthStore();
@@ -109,10 +111,10 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   container: { flex: 1, backgroundColor: palette.background },
   scroll:    { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  logo:      { ...typography.h1, textAlign: 'center', marginBottom: 4 },
+  logo:      { ...typography.h1, textAlign: 'center', marginBottom: 4, color: palette.text },
   tagline:   { ...typography.body, color: palette.textSecondary, textAlign: 'center', marginBottom: 40 },
   form:      { gap: 12 },
   input: {
@@ -134,7 +136,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { ...typography.button, color: palette.white },
+  buttonText: { ...typography.button, color: '#FFFFFF' },
   dividerRow:  { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginVertical: 4 },
   dividerLine: { flex: 1, height: 1, backgroundColor: palette.border },
   dividerText: { ...typography.caption, color: palette.textDisabled },
@@ -155,4 +157,4 @@ const styles = StyleSheet.create({
     marginTop: 40,
     lineHeight: 18,
   },
-});
+}));

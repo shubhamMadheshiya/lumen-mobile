@@ -41,6 +41,8 @@ interface ReminderState {
   addReminder: (input: CreateReminderInput) => Promise<IReminder>;
   updateReminder: (id: string, updates: Partial<IReminder>) => Promise<void>;
   deleteReminder: (id: string) => Promise<void>;
+  unarchiveReminder: (id: string) => Promise<void>;
+  permanentDeleteReminder: (id: string) => Promise<void>;
   toggleReminder: (id: string) => Promise<void>;
   snooze: (id: string, minutes?: number) => Promise<void>;
   duplicateReminder: (id: string) => Promise<void>;
@@ -64,7 +66,7 @@ export const useReminderStore = create<ReminderState>((set, get) => ({
 
     // 2. Fetch from backend
     try {
-      const res = await api.get<IReminder[]>('/reminders');
+      const res = await api.get<IReminder[]>('/reminders?includeArchived=true');
       if (Array.isArray(res)) {
         set({ reminders: res, isLoading: false });
         await AsyncStorage.setItem(REMINDERS_CACHE_KEY, JSON.stringify(res));
@@ -161,11 +163,44 @@ export const useReminderStore = create<ReminderState>((set, get) => ({
 
   deleteReminder: async (id: string) => {
     cancelReminder(id).catch(() => {});
+    // Mark as archived locally
+    const updated = get().reminders.map(r =>
+      (r._id === id || r.clientId === id)
+        ? { ...r, archivedAt: new Date().toISOString(), enabled: false }
+        : r
+    );
+    set({ reminders: updated });
+    await AsyncStorage.setItem(REMINDERS_CACHE_KEY, JSON.stringify(updated));
+
+    api.delete(`/reminders/${id}`).catch(() => {});
+  },
+
+  unarchiveReminder: async (id: string) => {
+    const target = get().reminders.find(r => r._id === id || r.clientId === id);
+    if (!target) return;
+
+    const restored: IReminder = {
+      ...target,
+      archivedAt: undefined,
+      enabled: true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const nextList = get().reminders.map(r => (r._id === id || r.clientId === id) ? restored : r);
+    set({ reminders: nextList });
+    await AsyncStorage.setItem(REMINDERS_CACHE_KEY, JSON.stringify(nextList));
+
+    scheduleReminder(restored).catch(() => {});
+    api.post(`/reminders/${id}/unarchive`, {}).catch(() => {});
+  },
+
+  permanentDeleteReminder: async (id: string) => {
+    cancelReminder(id).catch(() => {});
     const filtered = get().reminders.filter(r => r._id !== id && r.clientId !== id);
     set({ reminders: filtered });
     await AsyncStorage.setItem(REMINDERS_CACHE_KEY, JSON.stringify(filtered));
 
-    api.delete(`/reminders/${id}`).catch(() => {});
+    api.delete(`/reminders/${id}?permanent=true`).catch(() => {});
   },
 
   toggleReminder: async (id: string) => {

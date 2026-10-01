@@ -8,10 +8,11 @@ import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useConfigStore } from '../store/configStore';
-import { palette } from '../theme/colors';
+import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 
 export function FlareNowButton() {
+  const styles = useStyles();
   const { config } = useConfigStore();
 
   const symptomCategory = config?.categories.find(
@@ -44,7 +45,7 @@ export function FlareNowButton() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   btn: {
     backgroundColor: palette.catSymptom + '18',
     borderWidth: 1.5,
@@ -57,4 +58,4 @@ const styles = StyleSheet.create({
   flame: { fontSize: 28 },
   label: { ...typography.bodyBold, color: palette.catSymptom },
   sub: { ...typography.small, color: palette.textSecondary, marginTop: 1 },
-});
+}));

@@ -7,7 +7,7 @@ import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
 } from 'react-native';
 import { FieldDefinition, EnumValue } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -22,6 +22,8 @@ function isSelected(key: string, value: string | string[]): boolean {
 }
 
 export function EnumChips({ field, value, multiSelect = false, onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const items: EnumValue[] = field.enumValues ?? [];
 
   const toggle = (key: string) => {
@@ -73,7 +75,7 @@ export function EnumChips({ field, value, multiSelect = false, onChange }: Props
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 6 },
   scrollContent: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -89,4 +91,4 @@ const styles = StyleSheet.create({
   chipText: { ...typography.smallBold, color: palette.text },
   chipTextSelected: { color: palette.white },
   hint: { ...typography.small, color: palette.textSecondary },
-});
+}));

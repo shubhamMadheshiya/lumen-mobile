@@ -23,11 +23,9 @@ export function useNotificationSync() {
 
   useEffect(() => {
     (async () => {
-      const granted = await requestNotificationPermissions();
-      if (granted) {
-        await setupNotificationCategories();
-        await fetchReminders();
-      }
+      await requestNotificationPermissions();
+      await setupNotificationCategories();
+      await fetchReminders();
     })();
   }, []);
 
@@ -38,14 +36,23 @@ export function useNotificationSync() {
   }, [reminders]);
 
   useEffect(() => {
-    if (!N || typeof N.addNotificationResponseReceivedListener !== 'function') return;
+    if (!N) return;
 
-    const subscription = N.addNotificationResponseReceivedListener((response: any) => {
-      handleNotificationActionResponse(response).catch(() => {});
-    });
+    const responseSub = typeof N.addNotificationResponseReceivedListener === 'function'
+      ? N.addNotificationResponseReceivedListener((response: any) => {
+          handleNotificationActionResponse(response).catch(() => {});
+        })
+      : null;
+
+    const receivedSub = typeof N.addNotificationReceivedListener === 'function'
+      ? N.addNotificationReceivedListener((notification: any) => {
+          console.log('[Notifications] Notification triggered:', notification.request?.identifier);
+        })
+      : null;
 
     return () => {
-      subscription?.remove();
+      responseSub?.remove();
+      receivedSub?.remove();
     };
   }, []);
 }

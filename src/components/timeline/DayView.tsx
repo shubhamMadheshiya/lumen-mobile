@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { ILogEntry, ICategory, IOption, IQuestion } from '@lumen/shared';
 import { TimelineItem } from './TimelineItem';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -34,6 +34,8 @@ function toHourLabel(hour: number): string {
 }
 
 export function DayView({ date, entries, categories, questions, options, loading }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const buckets = useMemo<HourBucket[]>(() => {
     const map: Record<number, ILogEntry[]> = {};
     entries.forEach(e => {
@@ -117,7 +119,7 @@ export function DayView({ date, entries, categories, questions, options, loading
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   scroll: { padding: 16, paddingBottom: 60 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 10 },
   emptyIcon: { fontSize: 40 },
@@ -131,4 +133,4 @@ const styles = StyleSheet.create({
   hourLabel: { ...typography.caption, color: palette.textDisabled, fontWeight: '700' },
   line: { flex: 1, height: 1, backgroundColor: palette.border },
   entriesWrap: { paddingLeft: 4 },
-});
+}));

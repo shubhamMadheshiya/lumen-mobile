@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { FieldDefinition, FieldValue } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 import { StringField }        from './StringField';
@@ -30,6 +30,7 @@ interface Props {
 }
 
 export function DynamicField({ field, fieldValue, onChange, tempPrefUnit = 'C' }: Props) {
+  const styles = useStyles();
   const v = fieldValue?.value;
   const unit = fieldValue?.unit ?? field.unit ?? field.allowedUnits?.[0] ?? '';
 
@@ -175,9 +176,9 @@ export function DynamicField({ field, fieldValue, onChange, tempPrefUnit = 'C' }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 6 },
   labelRow: { flexDirection: 'row', alignItems: 'center' },
   label: { ...typography.smallBold, color: palette.textSecondary },
   required: { ...typography.smallBold, color: palette.error },
-});
+}));

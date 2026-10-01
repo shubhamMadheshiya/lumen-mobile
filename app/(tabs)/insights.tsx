@@ -13,12 +13,14 @@ import { useInsights, useRecomputeInsights } from '../../src/hooks/useInsights';
 import { DisclaimerBanner } from '../../src/components/insights/DisclaimerBanner';
 import { InsightCard } from '../../src/components/insights/InsightCard';
 import { StatCard } from '../../src/components/insights/StatCard';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 const MIN_DAYS_FOR_INSIGHTS = 14;
 
 export default function InsightsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { data, isLoading, refetch, isRefetching } = useInsights();
   const recompute = useRecomputeInsights();
   const [confidenceFilter, setConfidenceFilter] = useState<'All' | 'High' | 'Medium'>('All');
@@ -169,7 +171,7 @@ export default function InsightsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   heading: { ...typography.h2, color: palette.text },
@@ -202,4 +204,4 @@ const styles = StyleSheet.create({
   recomputeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 20, paddingVertical: 10 },
   recomputeText: { ...typography.body, color: palette.primary },
   dim: { opacity: 0.5 },
-});
+}));

@@ -4,7 +4,7 @@
  */
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 export interface DaySeverity {
@@ -26,9 +26,9 @@ interface Props {
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-function severityColor(severity: number): string {
+function severityColor(severity: number, primaryColor: string): string {
   if (severity < 0) return 'transparent';
-  if (severity === 0) return palette.primary + '22';
+  if (severity === 0) return primaryColor + '22';
   // 0–3 green-ish, 4–6 amber, 7–10 red-ish
   if (severity <= 3) return `rgba(56, 176, 120, ${0.25 + severity * 0.08})`;
   if (severity <= 6) return `rgba(251, 176, 52, ${0.3 + (severity - 4) * 0.1})`;
@@ -36,6 +36,8 @@ function severityColor(severity: number): string {
 }
 
 export function CalendarHeatMap({ year, month, data, selectedDate, onSelectDate, onPrevMonth, onNextMonth }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const dataMap = useMemo(() => {
     const m: Record<string, DaySeverity> = {};
     data.forEach(d => { m[d.date] = d; });
@@ -89,7 +91,7 @@ export function CalendarHeatMap({ year, month, data, selectedDate, onSelectDate,
             if (day === null) return <View key={col} style={styles.cell} />;
             const iso = isoDate(day);
             const info = dataMap[iso];
-            const bg = info ? severityColor(info.maxSeverity) : 'transparent';
+            const bg = info ? severityColor(info.maxSeverity, palette.primary) : 'transparent';
             const isToday = iso === todayStr;
             const isSelected = iso === selectedDate;
             return (
@@ -125,7 +127,7 @@ export function CalendarHeatMap({ year, month, data, selectedDate, onSelectDate,
       <View style={styles.legend}>
         <Text style={styles.legendLabel}>Severity: </Text>
         {[0, 3, 5, 7, 10].map(s => (
-          <View key={s} style={[styles.legendDot, { backgroundColor: s === 0 ? palette.primary + '22' : severityColor(s) }]} />
+          <View key={s} style={[styles.legendDot, { backgroundColor: s === 0 ? palette.primary + '22' : severityColor(s, palette.primary) }]} />
         ))}
         <Text style={styles.legendLabel}> None → High</Text>
       </View>
@@ -135,7 +137,7 @@ export function CalendarHeatMap({ year, month, data, selectedDate, onSelectDate,
 
 const CELL_SIZE = 38;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   wrap: { backgroundColor: palette.surface, borderRadius: 16, borderWidth: 1, borderColor: palette.border, padding: 12 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   navBtn: { padding: 6 },
@@ -154,4 +156,4 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, gap: 3 },
   legendLabel: { ...typography.caption, color: palette.textDisabled },
   legendDot: { width: 10, height: 10, borderRadius: 3 },
-});
+}));

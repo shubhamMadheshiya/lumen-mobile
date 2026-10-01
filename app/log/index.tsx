@@ -9,7 +9,7 @@ import {
 import { Stack, router } from 'expo-router';
 import { ICategory } from '@lumen/shared';
 import { useConfigStore } from '../../src/store/configStore';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 const ROLE_ORDER = ['symptom', 'trigger_candidate', 'context'] as const;
@@ -20,6 +20,8 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default function LogCategoryPicker() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { config, isLoading, fetchConfig } = useConfigStore();
 
   useEffect(() => { fetchConfig(); }, []);
@@ -71,6 +73,8 @@ export default function LogCategoryPicker() {
 }
 
 function CategoryRow({ category, onPress }: { category: ICategory; onPress: () => void }) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   return (
     <TouchableOpacity
       style={styles.row}
@@ -87,7 +91,7 @@ function CategoryRow({ category, onPress }: { category: ICategory; onPress: () =
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.background },
   list: { padding: 16, gap: 20 },
@@ -114,4 +118,4 @@ const styles = StyleSheet.create({
   dotIcon: { fontSize: 18 },
   rowLabel: { ...typography.body, color: palette.text, flex: 1 },
   chevron: { ...typography.h4, color: palette.textDisabled },
-});
+}));

@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useConfigStore } from '../../src/store/configStore';
@@ -53,6 +53,8 @@ const WEEKDAYS: Array<{ label: string; value: WeekDay }> = [
 const SNOOZE_OPTIONS = [5, 10, 15, 30];
 
 export default function AddReminderScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { addReminder } = useReminderStore();
   const { config } = useConfigStore();
 
@@ -354,7 +356,7 @@ export default function AddReminderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe: {
     flex: 1,
     backgroundColor: palette.background,
@@ -384,7 +386,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     ...typography.body,
     fontWeight: '700',
-    color: palette.surface,
+    color: '#FFFFFF',
   },
   content: {
     flex: 1,
@@ -457,7 +459,7 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
   },
   chipTextActive: {
-    color: palette.surface,
+    color: '#FFFFFF',
   },
   scheduleTypesCol: {
     gap: 8,
@@ -594,7 +596,7 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
   },
   snoozeChipTextActive: {
-    color: palette.surface,
+    color: '#FFFFFF',
   },
   toggleRow: {
     flexDirection: 'row',
@@ -607,4 +609,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: palette.text,
   },
-});
+}));

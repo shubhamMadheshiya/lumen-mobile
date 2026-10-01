@@ -13,7 +13,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ICategory, CategoryRole } from '@lumen/shared';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
-import { palette } from '../../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../../src/theme/ThemeContext';
 import { typography } from '../../../src/theme/typography';
 import { IconPicker } from '../../../src/components/customize/IconPicker';
 import { ColorSwatchPicker } from '../../../src/components/customize/ColorSwatchPicker';
@@ -25,6 +25,8 @@ const ROLES: { value: CategoryRole; label: string; desc: string }[] = [
 ];
 
 export default function CategoryEditor() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
   const { config, invalidate, fetchConfig } = useConfigStore();
@@ -73,19 +75,60 @@ export default function CategoryEditor() {
     }
   };
 
-  const handleDelete = () => {
+  const isArchived = existing ? (!existing.isActive || !!existing.archivedAt) : false;
+
+  const handleArchive = () => {
     if (isNew) return;
     Alert.alert(
       `Archive "${name}"?`,
-      'Logs linked to this category are preserved. Archived categories can be restored.',
+      'Logs linked to this category are preserved. Archived categories can be restored at any time.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Archive', style: 'destructive',
           onPress: async () => {
-            await api.post(`/categories/${id}/archive`, {});
-            invalidate(); await fetchConfig();
-            router.replace('/customize/categories');
+            try {
+              await api.post(`/categories/${id}/archive`, {});
+              invalidate(); await fetchConfig();
+              router.replace('/customize/categories');
+            } catch (err: any) {
+              Alert.alert('Archive failed', err?.message || 'Unknown error');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      await api.post(`/categories/${id}/unarchive`, {});
+      invalidate(); await fetchConfig();
+      Alert.alert('Category Restored', `"${name}" is active again.`);
+      router.replace('/customize/categories');
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message || 'Unknown error');
+    }
+  };
+
+  const handlePermanentDelete = () => {
+    if (isNew) return;
+    Alert.alert(
+      `Permanently delete "${name}"?`,
+      'This will remove the category and unlogged questions. If this category already has tracking history, it cannot be deleted to preserve your records.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/categories/${id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Category deleted permanently.');
+              router.replace('/customize/categories');
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting category');
+            }
           },
         },
       ],
@@ -97,6 +140,14 @@ export default function CategoryEditor() {
       <Stack.Screen options={{ title: isNew ? 'New category' : 'Edit category' }} />
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {isArchived && (
+          <View style={styles.archivedNotice}>
+            <Text style={styles.archivedNoticeText}>
+              📁 This category is currently archived. It will not show up in daily logging until restored.
+            </Text>
+          </View>
+        )}
+
         {/* Preview badge */}
         <View style={[styles.previewBadge, { backgroundColor: color + '22', borderColor: color + '55' }]}>
           <Text style={styles.previewIcon}>{icon}</Text>
@@ -162,9 +213,21 @@ export default function CategoryEditor() {
         )}
 
         {!isNew && (
-          <TouchableOpacity style={styles.archiveBtn} onPress={handleDelete}>
-            <Text style={styles.archiveBtnText}>Archive this category</Text>
-          </TouchableOpacity>
+          <View style={styles.actionSection}>
+            {isArchived ? (
+              <TouchableOpacity style={styles.unarchiveBtn} onPress={handleUnarchive} accessibilityRole="button">
+                <Text style={styles.unarchiveBtnText}>↺  Restore / Unarchive category</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.archiveBtn} onPress={handleArchive} accessibilityRole="button">
+                <Text style={styles.archiveBtnText}>Archive this category</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.deleteBtn} onPress={handlePermanentDelete} accessibilityRole="button">
+              <Text style={styles.deleteBtnText}>🗑  Delete permanently</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={{ height: 40 }} />
@@ -187,9 +250,17 @@ export default function CategoryEditor() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   scroll: { padding: 16, gap: 20, paddingBottom: 100 },
+  archivedNotice: {
+    backgroundColor: palette.warning + '18',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.warning + '40',
+    padding: 14,
+  },
+  archivedNoticeText: { ...typography.small, color: palette.warning, lineHeight: 18 },
   previewBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderRadius: 16, borderWidth: 1.5,
@@ -229,12 +300,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
   },
   questionsLinkText: { ...typography.bodyBold, color: palette.primary },
+  actionSection: { gap: 10, marginTop: 12 },
+  unarchiveBtn: {
+    backgroundColor: palette.secondary + '18', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.secondary + '60',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  unarchiveBtnText: { ...typography.bodyBold, color: palette.secondary },
   archiveBtn: {
+    backgroundColor: palette.warning + '12', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.warning + '40',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  archiveBtnText: { ...typography.bodyBold, color: palette.warning },
+  deleteBtn: {
     backgroundColor: palette.error + '12', borderRadius: 12,
     borderWidth: 1, borderColor: palette.error + '40',
     paddingVertical: 14, alignItems: 'center',
   },
-  archiveBtnText: { ...typography.bodyBold, color: palette.error },
+  deleteBtnText: { ...typography.bodyBold, color: palette.error },
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: 16, paddingBottom: 28,
@@ -246,4 +330,4 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { ...typography.button, color: palette.white },
-});
+}));

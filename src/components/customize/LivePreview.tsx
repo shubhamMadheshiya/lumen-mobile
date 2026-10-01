@@ -3,9 +3,9 @@
  * Used at the top of the option editor to give instant feedback.
  */
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 const DATA_TYPE_LABELS: Record<string, string> = {
@@ -23,6 +23,8 @@ interface Props {
 }
 
 export function LivePreview({ label, icon, color, fields }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const accentColor = color ?? palette.primary;
   return (
     <View style={[styles.card, { borderColor: accentColor + '44' }]}>
@@ -55,7 +57,7 @@ export function LivePreview({ label, icon, color, fields }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   card: {
     backgroundColor: palette.surfaceAlt,
     borderRadius: 16, borderWidth: 1.5,
@@ -90,4 +92,4 @@ const styles = StyleSheet.create({
   },
   fieldPreviewLabel: { ...typography.small, color: palette.textSecondary },
   fieldPreviewWidget: { ...typography.small, color: palette.textDisabled },
-});
+}));

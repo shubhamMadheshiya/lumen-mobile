@@ -13,7 +13,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { IOption, CaptureTime, FieldDefinition } from '@lumen/shared';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
-import { palette } from '../../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../../src/theme/ThemeContext';
 import { typography } from '../../../src/theme/typography';
 import { IconPicker } from '../../../src/components/customize/IconPicker';
 import { ColorSwatchPicker } from '../../../src/components/customize/ColorSwatchPicker';
@@ -34,6 +34,10 @@ const DATA_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function OptionEditor() {
+  const { palette } = useTheme();
+  const styles = useStyles();
+  const sectionStyles = useSectionStyles();
+  const toggleStyles = useToggleStyles();
   const { id, questionId } = useLocalSearchParams<{ id: string; questionId: string }>();
   const isNew = id === 'new';
   const { config, invalidate, fetchConfig } = useConfigStore();
@@ -100,18 +104,59 @@ export default function OptionEditor() {
     } finally { setSaving(false); }
   };
 
+  const isArchived = existing ? (!existing.isActive || !!existing.archivedAt) : false;
+
   const handleArchive = () => {
     if (isNew) return;
-    Alert.alert(`Archive "${label}"?`, 'Logs with this option are preserved.', [
+    Alert.alert(`Archive "${label}"?`, 'Logs with this option are preserved. You can restore it later at any time.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Archive', style: 'destructive',
         onPress: async () => {
-          await api.post(`/options/${id}/archive`, {});
-          invalidate(); await fetchConfig(); router.back();
+          try {
+            await api.post(`/options/${id}/archive`, {});
+            invalidate(); await fetchConfig(); router.back();
+          } catch (err: any) {
+            Alert.alert('Archive failed', err?.message || 'Unknown error');
+          }
         },
       },
     ]);
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      await api.post(`/options/${id}/unarchive`, {});
+      invalidate(); await fetchConfig();
+      Alert.alert('Option Restored', `"${label}" is active again.`);
+      router.back();
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message || 'Unknown error');
+    }
+  };
+
+  const handlePermanentDelete = () => {
+    if (isNew) return;
+    Alert.alert(
+      `Permanently delete "${label}"?`,
+      'This action cannot be undone. If tracking entries have been logged for this option, deletion will be blocked to protect your records.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/options/${id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Option deleted permanently.');
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting option');
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -119,6 +164,13 @@ export default function OptionEditor() {
       <Stack.Screen options={{ title: isNew ? 'New option' : 'Edit option' }} />
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {isArchived && (
+          <View style={styles.archivedNotice}>
+            <Text style={styles.archivedNoticeText}>
+              📁 This option is currently archived. It will not appear in question forms until restored.
+            </Text>
+          </View>
+        )}
 
         {/* Live preview */}
         <LivePreview
@@ -188,9 +240,21 @@ export default function OptionEditor() {
         <FieldPresetPicker onPick={addFieldFromPreset} />
 
         {!isNew && (
-          <TouchableOpacity style={styles.archiveBtn} onPress={handleArchive}>
-            <Text style={styles.archiveBtnText}>Archive this option</Text>
-          </TouchableOpacity>
+          <View style={styles.actionSection}>
+            {isArchived ? (
+              <TouchableOpacity style={styles.unarchiveBtn} onPress={handleUnarchive} accessibilityRole="button">
+                <Text style={styles.unarchiveBtnText}>↺  Restore / Unarchive option</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.archiveBtn} onPress={handleArchive} accessibilityRole="button">
+                <Text style={styles.archiveBtnText}>Archive this option</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.deleteBtn} onPress={handlePermanentDelete} accessibilityRole="button">
+              <Text style={styles.deleteBtnText}>🗑  Delete permanently</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={{ height: 40 }} />
@@ -217,14 +281,18 @@ export default function OptionEditor() {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function SectionHeader({ title }: { title: string }) {
+  const sectionStyles = useSectionStyles();
   return <Text style={sectionStyles.title}>{title}</Text>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const fieldStyles = useFieldStyles();
   return <View style={fieldStyles.wrapper}><Text style={fieldStyles.label}>{label}</Text>{children}</View>;
 }
 
 function ToggleRow({ label, desc, value, onChange }: { label: string; desc: string; value: boolean; onChange: (v: boolean) => void }) {
+  const { palette } = useTheme();
+  const toggleStyles = useToggleStyles();
   return (
     <View style={toggleStyles.row}>
       <View style={toggleStyles.text}><Text style={toggleStyles.label}>{label}</Text><Text style={toggleStyles.desc}>{desc}</Text></View>
@@ -234,6 +302,7 @@ function ToggleRow({ label, desc, value, onChange }: { label: string; desc: stri
 }
 
 function FieldRow({ field, onEdit, onRemove }: { field: FieldDefinition; onEdit: () => void; onRemove: () => void }) {
+  const fieldRowStyles = useFieldRowStyles();
   return (
     <View style={fieldRowStyles.row}>
       <TouchableOpacity style={fieldRowStyles.main} onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit field ${field.label}`}>
@@ -251,6 +320,8 @@ function FieldRow({ field, onEdit, onRemove }: { field: FieldDefinition; onEdit:
 }
 
 function InlineFieldEditor({ field, onSave, onClose }: { field: FieldDefinition; onSave: (patch: Partial<FieldDefinition>) => void; onClose: () => void }) {
+  const { palette } = useTheme();
+  const inlineStyles = useInlineStyles();
   const [label,    setLabel]    = useState(field.label);
   const [key,      setKey]      = useState(field.key);
   const [unit,     setUnit]     = useState(field.unit ?? '');
@@ -300,20 +371,21 @@ function InlineFieldEditor({ field, onSave, onClose }: { field: FieldDefinition;
 }
 
 function InlineField({ label, children }: { label: string; children: React.ReactNode }) {
+  const fieldStyles = useFieldStyles();
   return <View style={{ gap: 4, marginBottom: 12 }}><Text style={fieldStyles.label}>{label}</Text>{children}</View>;
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const sectionStyles = StyleSheet.create({ title: { ...typography.h4, color: palette.text, marginTop: 8 } });
-const fieldStyles   = StyleSheet.create({ wrapper: { gap: 6 }, label: { ...typography.smallBold, color: palette.textSecondary } });
-const toggleStyles  = StyleSheet.create({
+const useSectionStyles = createThemedStyles((palette) => ({ title: { ...typography.h4, color: palette.text, marginTop: 8 } }));
+const useFieldStyles   = createThemedStyles((palette) => ({ wrapper: { gap: 6 }, label: { ...typography.smallBold, color: palette.textSecondary } }));
+const useToggleStyles  = createThemedStyles((palette) => ({
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 14, paddingVertical: 12, gap: 12 },
   text: { flex: 1 },
   label: { ...typography.body, color: palette.text },
   desc: { ...typography.small, color: palette.textSecondary, marginTop: 2 },
-});
-const fieldRowStyles = StyleSheet.create({
+}));
+const useFieldRowStyles = createThemedStyles((palette) => ({
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.border, overflow: 'hidden' },
   main: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12 },
   info: { flex: 1 },
@@ -322,8 +394,8 @@ const fieldRowStyles = StyleSheet.create({
   edit: { ...typography.small, color: palette.primary },
   remove: { paddingHorizontal: 16, paddingVertical: 12, borderLeftWidth: 1, borderLeftColor: palette.border, backgroundColor: palette.surfaceAlt },
   removeText: { ...typography.body, color: palette.error },
-});
-const inlineStyles = StyleSheet.create({
+}));
+const useInlineStyles = createThemedStyles((palette) => ({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   backdropTouch: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: { backgroundColor: palette.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '75%' },
@@ -338,9 +410,9 @@ const inlineStyles = StyleSheet.create({
   footer: { padding: 16, paddingBottom: 28, borderTopWidth: 1, borderTopColor: palette.border },
   saveBtn: { backgroundColor: palette.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { ...typography.button, color: palette.white },
-});
+}));
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   scroll: { padding: 16, gap: 14, paddingBottom: 100 },
   input: { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, ...typography.body, color: palette.text, minHeight: 52 },
@@ -352,10 +424,35 @@ const styles = StyleSheet.create({
   radioText: { flex: 1 },
   radioLabel: { ...typography.bodyBold, color: palette.text },
   radioDesc: { ...typography.small, color: palette.textSecondary, marginTop: 1 },
-  archiveBtn: { backgroundColor: palette.error + '12', borderRadius: 12, borderWidth: 1, borderColor: palette.error + '40', paddingVertical: 14, alignItems: 'center' },
-  archiveBtnText: { ...typography.bodyBold, color: palette.error },
+  archivedNotice: {
+    backgroundColor: palette.warning + '18',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.warning + '40',
+    padding: 14,
+  },
+  archivedNoticeText: { ...typography.small, color: palette.warning, lineHeight: 18 },
+  actionSection: { gap: 10, marginTop: 12 },
+  unarchiveBtn: {
+    backgroundColor: palette.secondary + '18', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.secondary + '60',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  unarchiveBtnText: { ...typography.bodyBold, color: palette.secondary },
+  archiveBtn: {
+    backgroundColor: palette.warning + '12', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.warning + '40',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  archiveBtnText: { ...typography.bodyBold, color: palette.warning },
+  deleteBtn: {
+    backgroundColor: palette.error + '12', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.error + '40',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  deleteBtnText: { ...typography.bodyBold, color: palette.error },
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 28, backgroundColor: palette.surface, borderTopWidth: 1, borderTopColor: palette.border },
   saveBtn: { backgroundColor: palette.primary, borderRadius: 14, paddingVertical: 16, alignItems: 'center', minHeight: 54 },
   disabled: { opacity: 0.6 },
   saveBtnText: { ...typography.button, color: palette.white },
-});
+}));

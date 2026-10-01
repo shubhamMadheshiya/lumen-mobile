@@ -7,7 +7,7 @@ import {
   View, Text, TouchableOpacity, Modal, Pressable,
   FlatList, TextInput, StyleSheet,
 } from 'react-native';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 const ICON_SECTIONS = [
@@ -46,6 +46,8 @@ interface Props {
 }
 
 export function IconPicker({ value, onChange, label = 'Icon' }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -110,7 +112,7 @@ export function IconPicker({ value, onChange, label = 'Icon' }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   row: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
@@ -149,4 +151,4 @@ const styles = StyleSheet.create({
   },
   cellActive: { backgroundColor: palette.primary + '22' },
   cellIcon: { fontSize: 26 },
-});
+}));

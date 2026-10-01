@@ -8,7 +8,7 @@ import {
   TextInput,
   TouchableWithoutFeedback,
 } from 'react-native';
-import { palette } from '../theme/colors';
+import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { useQuickLogStore } from '../store/quickLogStore';
 
@@ -27,6 +27,8 @@ const PRESETS = [
 ];
 
 export function WaterQuantityModal({ visible, onClose, quickActionId, onLogged }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [customValue, setCustomValue] = useState('');
   const [isCustom, setIsCustom] = useState(false);
   const { tap } = useQuickLogStore();
@@ -123,7 +125,7 @@ export function WaterQuantityModal({ visible, onClose, quickActionId, onLogged }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
@@ -233,4 +235,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#09090E',
   },
-});
+}));

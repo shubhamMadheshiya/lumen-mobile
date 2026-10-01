@@ -12,10 +12,12 @@ import * as Sharing from 'expo-sharing';
 import { Stack } from 'expo-router';
 import { api } from '../../src/api/client';
 import { useConfigStore } from '../../src/store/configStore';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 export default function ExportScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { invalidate, fetchConfig } = useConfigStore();
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -23,10 +25,11 @@ export default function ExportScreen() {
   const exportConfig = async () => {
     setExporting(true);
     try {
-      const res = await api.get('/config/export');
+      const res: any = await api.get('/config/export');
       const json = JSON.stringify(res.data, null, 2);
       const timestamp = new Date().toISOString().slice(0, 10);
-      const path = `${FileSystem.cacheDirectory}lumen-config-${timestamp}.json`;
+      const cacheDir = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || '';
+      const path = `${cacheDir}lumen-config-${timestamp}.json`;
       await FileSystem.writeAsStringAsync(path, json, { encoding: FileSystem.EncodingType.UTF8 });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -134,7 +137,7 @@ export default function ExportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 16 },
   card: { backgroundColor: palette.surface, borderRadius: 16, borderWidth: 1, borderColor: palette.border, padding: 20, gap: 10 },
@@ -142,10 +145,10 @@ const styles = StyleSheet.create({
   cardTitle: { ...typography.h4, color: palette.text },
   cardDesc: { ...typography.body, color: palette.textSecondary },
   btn: { backgroundColor: palette.primary, borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 4 },
-  btnText: { ...typography.button, color: palette.white },
+  btnText: { ...typography.button, color: '#FFFFFF' },
   btnSecondary: { backgroundColor: palette.background, borderWidth: 1.5, borderColor: palette.primary },
   btnSecondaryText: { color: palette.primary },
   note: { backgroundColor: palette.surfaceAlt, borderRadius: 12, borderWidth: 1, borderColor: palette.border, padding: 16 },
   noteText: { ...typography.small, color: palette.textSecondary },
   noteBold: { fontWeight: '700', color: palette.text },
-});
+}));

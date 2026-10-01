@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { CheckCircle2, Footprints, Flame, Timer, TrendingUp } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useActivityStore } from '../../src/store/activityStore';
 
@@ -29,6 +29,8 @@ function formatPace(paceMinPerKm: number): string {
 }
 
 export default function WalkingSummaryScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { history } = useActivityStore();
   const latestSession = history[0];
 
@@ -124,7 +126,7 @@ export default function WalkingSummaryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe: {
     flex: 1,
     backgroundColor: palette.background,
@@ -214,4 +216,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
   },
-});
+}));

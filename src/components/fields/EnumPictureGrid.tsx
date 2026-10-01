@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { FieldDefinition, EnumValue } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -16,6 +16,8 @@ interface Props {
 }
 
 export function EnumPictureGrid({ field, value, onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { width } = useWindowDimensions();
   const items: EnumValue[] = field.enumValues ?? [];
   const cols = items.length <= 4 ? 2 : 3;
@@ -70,7 +72,7 @@ export function EnumPictureGrid({ field, value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   card: {
@@ -107,4 +109,4 @@ const styles = StyleSheet.create({
   cardLabelSelected: { color: palette.primary },
   cardDesc: { ...typography.caption, color: palette.textSecondary, marginTop: 2 },
   hint: { ...typography.small, color: palette.textSecondary },
-});
+}));

@@ -10,12 +10,14 @@ import { useConfigStore } from '../../src/store/configStore';
 import { CalendarHeatMap } from '../../src/components/timeline/CalendarHeatMap';
 import { DayView } from '../../src/components/timeline/DayView';
 import { useTimelineSummary, useDayEntries } from '../../src/hooks/useTimelineSummary';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 function toISO(d: Date) { return d.toISOString().slice(0, 10); }
 
 export default function TimelineScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const today = toISO(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -160,7 +162,7 @@ export default function TimelineScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   heading: { ...typography.h2, color: palette.text },
@@ -180,4 +182,4 @@ const styles = StyleSheet.create({
   filterText: { ...typography.small, color: palette.textSecondary, fontWeight: '600' },
   filterTextActive: { color: palette.primary },
   dayViewWrap: { minHeight: 300 },
-});
+}));

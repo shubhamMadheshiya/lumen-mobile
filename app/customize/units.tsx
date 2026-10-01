@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { api } from '../../src/api/client';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 interface ICustomUnit {
@@ -25,13 +25,15 @@ const BUILT_IN_UNITS = [
 ];
 
 export default function UnitsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [customUnits, setCustomUnits] = useState<ICustomUnit[]>([]);
   const [editing, setEditing] = useState<Partial<ICustomUnit> | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const res = await api.get('/units');
-    setCustomUnits(res.data.units ?? []);
+    const res: any = await api.get('/units');
+    setCustomUnits(res.data?.units ?? res.data ?? []);
   };
   useEffect(() => { load(); }, []);
 
@@ -131,7 +133,7 @@ export default function UnitsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   list: { padding: 16, gap: 8 },
   hint: { ...typography.small, color: palette.textSecondary, marginBottom: 8 },
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
   deleteBtn: { padding: 6 },
   deleteBtnText: { ...typography.body, color: palette.textDisabled },
   fab: { position: 'absolute', bottom: 20, alignSelf: 'center', backgroundColor: palette.primary, borderRadius: 24, paddingHorizontal: 28, paddingVertical: 14, elevation: 8 },
-  fabText: { ...typography.button, color: palette.white },
+  fabText: { ...typography.button, color: '#FFFFFF' },
   modalWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: { backgroundColor: palette.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
@@ -165,4 +167,4 @@ const styles = StyleSheet.create({
   fieldLabel: { ...typography.label, color: palette.textSecondary, marginTop: 10 },
   input: { backgroundColor: palette.surfaceAlt, borderRadius: 10, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 14, paddingVertical: 12, ...typography.body, color: palette.text },
   conversionHint: { ...typography.small, color: palette.textDisabled, marginTop: 4 },
-});
+}));

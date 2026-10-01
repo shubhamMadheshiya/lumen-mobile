@@ -1,8 +1,9 @@
 import { Stack } from 'expo-router';
-import { palette } from '../../src/theme/colors';
+import { useTheme } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 export default function CustomizeLayout() {
+  const { palette } = useTheme();
   return (
     <Stack
       screenOptions={{
@@ -15,3 +16,4 @@ export default function CustomizeLayout() {
     />
   );
 }
+

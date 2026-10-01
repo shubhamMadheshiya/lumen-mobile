@@ -11,9 +11,10 @@
 import React, {
   createContext, useContext, useEffect, useState, useMemo, ReactNode,
 } from 'react';
-import { useColorScheme, Appearance } from 'react-native';
+import { Appearance, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightTokens, darkTokens, ThemeTokens } from './tokens';
+import { palette as staticPalette } from './colors';
 
 type ColorScheme = 'light' | 'dark' | 'system';
 
@@ -34,8 +35,17 @@ const ThemeContext = createContext<ThemeContextValue>({
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const systemScheme = useColorScheme() ?? 'light';
+  const [systemScheme, setSystemScheme] = useState<'light' | 'dark'>(
+    Appearance.getColorScheme() === 'dark' ? 'dark' : 'light'
+  );
   const [preference, setPreferenceState] = useState<ColorScheme>('system');
+
+  useEffect(() => {
+    const sub = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemScheme(colorScheme === 'dark' ? 'dark' : 'light');
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(PREF_KEY).then(stored => {
@@ -52,9 +62,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const colorScheme: 'light' | 'dark' =
     preference === 'system'
-      ? (systemScheme === 'dark' ? 'dark' : 'light')
+      ? systemScheme
       : preference;
   const palette = colorScheme === 'dark' ? darkTokens : lightTokens;
+
+  // Keep static palette in colors.ts in sync for immediate read access
+  useEffect(() => {
+    Object.assign(staticPalette, palette);
+  }, [palette]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({ palette, colorScheme, preference, setPreference }),
@@ -71,4 +86,16 @@ export function useTheme(): ThemeContextValue {
 /** Convenience hook — just the palette, for migrated components. */
 export function usePalette(): ThemeTokens {
   return useContext(ThemeContext).palette;
+}
+
+/**
+ * Helper to generate reactive stylesheets that cleanly re-render when theme changes.
+ */
+export function createThemedStyles<T extends StyleSheet.NamedStyles<T> | StyleSheet.NamedStyles<any>>(
+  factory: (palette: ThemeTokens) => T
+): () => T {
+  return function useStyles(): T {
+    const { palette } = useTheme();
+    return useMemo(() => StyleSheet.create(factory(palette)), [palette]);
+  };
 }

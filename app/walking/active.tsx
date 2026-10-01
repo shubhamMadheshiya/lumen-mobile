@@ -10,7 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Pause, Play, Square, Footprints } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { palette } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
 import { useActivityStore } from '../../src/store/activityStore';
 
@@ -136,7 +135,7 @@ export default function ActiveWalkingScreen() {
         {/* Steps */}
         <View style={styles.metricTile}>
           <View style={styles.stepsRow}>
-            <Footprints size={18} color={palette.secondary} />
+            <Footprints size={18} color="#06B6D4" />
             <Text style={styles.metricVal}>{steps.toLocaleString()}</Text>
           </View>
           <Text style={styles.metricLabel}>Steps</Text>

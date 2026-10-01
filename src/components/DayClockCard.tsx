@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { palette } from '../theme/colors';
+import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { useDaySessionStore } from '../store/daySessionStore';
 
@@ -29,6 +29,8 @@ function formatDuration(ms: number): string {
 }
 
 export function DayClockCard(): React.ReactElement {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { todaySession, recordWakeUp, recordGoToBed, isLoading } = useDaySessionStore();
 
   const hasWoken  = !!todaySession?.wakeTime;
@@ -116,7 +118,7 @@ export function DayClockCard(): React.ReactElement {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   card: {
     borderRadius: 20,
     padding: 18,
@@ -128,17 +130,17 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   sleepingCard: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: palette.surface,
     borderWidth: 2,
     borderColor: palette.primary,
   },
   awakeCard: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: palette.surface,
     borderWidth: 1,
     borderColor: palette.border,
   },
   closedCard: {
-    backgroundColor: '#F0F4FF',
+    backgroundColor: palette.surfaceAlt,
     alignItems: 'center',
     paddingVertical: 24,
   },
@@ -164,14 +166,16 @@ const styles = StyleSheet.create({
   },
   sleepButton: {
     marginTop: 12,
-    backgroundColor: palette.darkBackground,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: palette.border,
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
   },
   sleepButtonText: {
     ...typography.button,
-    color: palette.white,
+    color: palette.text,
   },
   closedEmoji: {
     fontSize: 40,
@@ -186,4 +190,4 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     marginTop: 4,
   },
-});
+}));

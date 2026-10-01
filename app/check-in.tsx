@@ -16,7 +16,7 @@ import { useDaySessionStore } from '../src/store/daySessionStore';
 import { useAuthStore } from '../src/store/authStore';
 import { api } from '../src/api/client';
 import { uploadAnswerImages } from '../src/utils/uploadAnswerImages';
-import { palette } from '../src/theme/colors';
+import { useTheme, createThemedStyles } from '../src/theme/ThemeContext';
 import { typography } from '../src/theme/typography';
 import { QuestionCard } from '../src/components/QuestionCard';
 
@@ -34,6 +34,8 @@ const META: Record<string, { emoji: string; title: string; subtitle: string }> =
 };
 
 export default function CheckInModal() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { type = 'morning' } = useLocalSearchParams<{ type: string }>();
   const { config } = useConfigStore();
   const { todaySession } = useDaySessionStore();
@@ -162,7 +164,7 @@ export default function CheckInModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   scroll: { padding: 16, gap: 14 },
   hero: {
@@ -197,5 +199,5 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', minHeight: 52,
   },
   submitBtnDisabled: { opacity: 0.6 },
-  submitText: { ...typography.button, color: palette.white },
-});
+  submitText: { ...typography.button, color: '#FFFFFF' },
+}));

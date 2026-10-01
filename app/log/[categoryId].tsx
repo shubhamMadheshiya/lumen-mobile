@@ -16,7 +16,7 @@ import { useConfigStore } from '../../src/store/configStore';
 import { useDaySessionStore } from '../../src/store/daySessionStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { api } from '../../src/api/client';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { QuestionCard } from '../../src/components/QuestionCard';
 import { validateAnswers } from '../../src/utils/validateAnswers';
@@ -33,6 +33,8 @@ function fmt(d: Date): string {
 }
 
 export default function QuestionSheet() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
   const { config } = useConfigStore();
   const { todaySession } = useDaySessionStore();
@@ -271,7 +273,7 @@ export default function QuestionSheet() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorText: { ...typography.body, color: palette.error },
@@ -321,7 +323,7 @@ const styles = StyleSheet.create({
     minHeight: 54,
   },
   submitBtnDisabled: { opacity: 0.6 },
-  submitText: { ...typography.button, color: palette.white },
+  submitText: { ...typography.button, color: '#FFFFFF' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   pickerSheet: {
     backgroundColor: palette.surface,
@@ -334,4 +336,4 @@ const styles = StyleSheet.create({
   },
   pickerTitle: { ...typography.h4, color: palette.text },
   pickerDone: { ...typography.bodyBold, color: palette.primary },
-});
+}));

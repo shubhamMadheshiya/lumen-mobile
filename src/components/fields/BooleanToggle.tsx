@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, Switch, StyleSheet } from 'react-native';
+import { View, Text, Switch } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
 }
 
 export function BooleanToggle({ field, value, onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       <View style={styles.labelGroup}>
@@ -29,7 +31,7 @@ export function BooleanToggle({ field, value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -44,4 +46,4 @@ const styles = StyleSheet.create({
   labelGroup: { flex: 1, paddingRight: 16 },
   label: { ...typography.body, color: palette.text },
   hint:  { ...typography.small, color: palette.textSecondary, marginTop: 2 },
-});
+}));

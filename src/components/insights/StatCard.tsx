@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MiniBar } from './MiniBar';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -23,6 +23,8 @@ interface Props {
 const TREND_ICON = { up: '↑', down: '↓', flat: '→' };
 
 export function StatCard({ icon, title, value, sub, trend, trendGoodDirection, sparkValues, sparkColor, accentColor }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const accent = accentColor ?? palette.primary;
 
   const trendColor = trend == null ? palette.textDisabled
@@ -59,7 +61,7 @@ export function StatCard({ icon, title, value, sub, trend, trendGoodDirection, s
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   card: {
     backgroundColor: palette.surface, borderRadius: 16,
     borderWidth: 1.5, padding: 14, gap: 8, flex: 1,
@@ -73,4 +75,4 @@ const styles = StyleSheet.create({
   trend: { ...typography.h4, fontWeight: '700' },
   sub: { ...typography.caption, color: palette.textDisabled },
   spark: { marginTop: 2 },
-});
+}));

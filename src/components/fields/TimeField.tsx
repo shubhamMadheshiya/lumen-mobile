@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -38,6 +38,8 @@ function fmt12(v: string): string {
 }
 
 export function TimeField({ field, value, onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const date = value ? parseHHmm(value) : new Date();
 
@@ -106,7 +108,7 @@ export function TimeField({ field, value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 6 },
   button: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -134,4 +136,4 @@ const styles = StyleSheet.create({
   },
   iosTitle: { ...typography.h4, color: palette.text },
   iosDone: { ...typography.bodyBold, color: palette.primary },
-});
+}));

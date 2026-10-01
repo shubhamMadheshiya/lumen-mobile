@@ -5,7 +5,7 @@
  */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 export interface InsightResult {
@@ -18,12 +18,6 @@ export interface InsightResult {
   confidence: 'Low' | 'Medium' | 'High';
   computedAt: string;
 }
-
-const CONFIDENCE_COLOR: Record<string, string> = {
-  Low: palette.textDisabled,
-  Medium: palette.warning,
-  High: palette.success,
-};
 
 const LAG_LABELS: Record<string, string> = {
   '0-6h': 'within 6 h',
@@ -41,8 +35,15 @@ function liftDescription(lift: number): string {
 }
 
 export function InsightCard({ insight }: { insight: InsightResult }) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [expanded, setExpanded] = useState(false);
-  const confColor = CONFIDENCE_COLOR[insight.confidence] ?? palette.textDisabled;
+  const confColor =
+    insight.confidence === 'High'
+      ? palette.success
+      : insight.confidence === 'Medium'
+      ? palette.warning
+      : palette.textDisabled;
   const lagLabel = LAG_LABELS[insight.lagWindow] ?? insight.lagWindow;
 
   return (
@@ -112,7 +113,7 @@ export function InsightCard({ insight }: { insight: InsightResult }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   card: {
     backgroundColor: palette.surface, borderRadius: 16,
     borderWidth: 1, borderColor: palette.border, padding: 16, gap: 10,
@@ -136,4 +137,4 @@ const styles = StyleSheet.create({
   details: { borderTopWidth: 1, borderTopColor: palette.border, paddingTop: 12, gap: 8 },
   detailsText: { ...typography.small, color: palette.textSecondary, lineHeight: 20 },
   computedAt: { ...typography.caption, color: palette.textDisabled },
-});
+}));

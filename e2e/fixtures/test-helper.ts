@@ -1,6 +1,6 @@
 import { Page } from '@playwright/test';
 
-const API_BASE = 'http://127.0.0.1:3000/api/v1';
+const API_BASE = process.env.API_BASE || 'http://127.0.0.1:3081/api/v1';
 
 export interface TestUser {
   email: string;

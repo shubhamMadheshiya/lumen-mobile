@@ -1,7 +1,7 @@
 import React from 'react';
-import { TextInput, StyleSheet, Text, View } from 'react-native';
+import { TextInput, Text, View } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
 }
 
 export function StringField({ field, value, onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.wrapper}>
       {field.helpText ? <Text style={styles.hint}>{field.helpText}</Text> : null}
@@ -28,7 +30,7 @@ export function StringField({ field, value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 6 },
   hint: { ...typography.small, color: palette.textSecondary },
   input: {
@@ -41,4 +43,4 @@ const styles = StyleSheet.create({
     color: palette.text,
     minHeight: 48,
   },
-});
+}));

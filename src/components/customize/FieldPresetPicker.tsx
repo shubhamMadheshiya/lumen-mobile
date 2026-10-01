@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
 import { BRISTOL_SCALE, URINE_COLOR } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 export interface Preset {
@@ -128,6 +128,7 @@ interface Props {
 }
 
 export function FieldPresetPicker({ onPick }: Props) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
 
   return (
@@ -177,7 +178,7 @@ export function FieldPresetPicker({ onPick }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   trigger: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: palette.primary + '14',
@@ -211,4 +212,4 @@ const styles = StyleSheet.create({
   presetLabel: { ...typography.bodyBold, color: palette.text },
   presetDesc: { ...typography.small, color: palette.textSecondary, marginTop: 1 },
   presetChevron: { ...typography.h4, color: palette.textDisabled },
-});
+}));

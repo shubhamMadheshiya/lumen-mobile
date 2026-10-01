@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -19,6 +19,8 @@ const toF = (c: number) => c * 9 / 5 + 32;
 const toC = (f: number) => (f - 32) * 5 / 9;
 
 export function TemperatureStepper({ field, value, prefUnit = 'C', onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const step      = field.step ?? 0.1;
   const minC      = field.min  ?? 34;
   const maxC      = field.max  ?? 42;
@@ -77,7 +79,7 @@ export function TemperatureStepper({ field, value, prefUnit = 'C', onChange }: P
 
 const BTN = 52;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   btn: {
@@ -100,4 +102,4 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   hint: { ...typography.small, color: palette.textSecondary },
-});
+}));

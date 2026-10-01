@@ -11,7 +11,7 @@ import { Stack, router } from 'expo-router';
 import { ICategory } from '@lumen/shared';
 import { useConfigStore } from '../../src/store/configStore';
 import { api } from '../../src/api/client';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -21,6 +21,8 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default function CategoriesScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { config, fetchConfig, invalidate, isLoading } = useConfigStore();
   const [reordering, setReordering] = useState(false);
 
@@ -60,7 +62,7 @@ export default function CategoriesScreen() {
   const archive = (cat: ICategory) => {
     Alert.alert(
       `Archive "${cat.name}"?`,
-      'Past logs will be kept. You can restore it later.',
+      'Past logs will be kept. You can restore it later at any time.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -68,6 +70,37 @@ export default function CategoriesScreen() {
           onPress: async () => {
             await api.post(`/categories/${cat._id}/archive`, {});
             invalidate(); await fetchConfig();
+          },
+        },
+      ],
+    );
+  };
+
+  const unarchive = async (cat: ICategory) => {
+    try {
+      await api.post(`/categories/${cat._id}/unarchive`, {});
+      invalidate(); await fetchConfig();
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message || 'Unknown error');
+    }
+  };
+
+  const deletePermanently = (cat: ICategory) => {
+    Alert.alert(
+      `Permanently delete "${cat.name}"?`,
+      'This action cannot be undone. If it has logged history, deletion will be blocked.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/categories/${cat._id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Category deleted.');
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting category');
+            }
           },
         },
       ],
@@ -136,15 +169,36 @@ export default function CategoriesScreen() {
             <View style={styles.archivedSection}>
               <Text style={styles.sectionLabel}>Archived ({archived.length})</Text>
               {archived.map(cat => (
-                <TouchableOpacity
-                  key={cat._id}
-                  style={styles.archivedRow}
-                  onPress={() => router.push(`/customize/category/${cat._id}`)}
-                >
-                  <Text style={styles.archivedIcon}>{cat.icon}</Text>
-                  <Text style={styles.archivedName}>{cat.name}</Text>
-                  <Text style={styles.archivedBadge}>Archived</Text>
-                </TouchableOpacity>
+                <View key={cat._id} style={styles.archivedRow}>
+                  <TouchableOpacity
+                    style={styles.archivedRowMain}
+                    onPress={() => router.push(`/customize/category/${cat._id}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit archived category ${cat.name}`}
+                  >
+                    <Text style={styles.archivedIcon}>{cat.icon}</Text>
+                    <Text style={styles.archivedName} numberOfLines={1}>{cat.name}</Text>
+                    <Text style={styles.archivedBadge}>Archived</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.restoreBtn}
+                    onPress={() => unarchive(cat)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Restore ${cat.name}`}
+                  >
+                    <Text style={styles.restoreBtnText}>↺ Restore</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteIconBtn}
+                    onPress={() => deletePermanently(cat)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${cat.name}`}
+                  >
+                    <Text style={styles.deleteIconText}>🗑</Text>
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           ) : null
@@ -165,7 +219,7 @@ export default function CategoriesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   list: { padding: 16, paddingBottom: 100, gap: 8 },
   row: {
@@ -203,18 +257,32 @@ const styles = StyleSheet.create({
     marginLeft: 4, marginBottom: 4,
   },
   archivedRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: palette.surface, borderRadius: 12,
     borderWidth: 1, borderColor: palette.border,
-    paddingHorizontal: 14, paddingVertical: 12, opacity: 0.7,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  archivedRowMain: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flex: 1,
   },
   archivedIcon: { fontSize: 18 },
   archivedName: { ...typography.body, color: palette.textSecondary, flex: 1 },
   archivedBadge: {
     ...typography.caption, color: palette.textDisabled,
     backgroundColor: palette.surfaceAlt, borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 2,
+    paddingHorizontal: 6, paddingVertical: 2,
   },
+  restoreBtn: {
+    backgroundColor: palette.secondary + '18', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: palette.secondary + '50',
+  },
+  restoreBtnText: { ...typography.smallBold, color: palette.secondary },
+  deleteIconBtn: {
+    backgroundColor: palette.error + '14', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: palette.error + '40',
+  },
+  deleteIconText: { fontSize: 14 },
   fab: {
     position: 'absolute', bottom: 20, alignSelf: 'center',
     backgroundColor: palette.primary, borderRadius: 24,
@@ -222,5 +290,5 @@ const styles = StyleSheet.create({
     shadowColor: palette.primary, shadowOpacity: 0.4, shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },
-  fabText: { ...typography.button, color: palette.white },
-});
+  fabText: { ...typography.button, color: '#FFFFFF' },
+}));

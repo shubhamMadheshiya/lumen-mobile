@@ -37,6 +37,8 @@ module.exports = {
         'USE_FINGERPRINT',
         'RECEIVE_BOOT_COMPLETED',
         'VIBRATE',
+        'POST_NOTIFICATIONS',
+        'SCHEDULE_EXACT_ALARM',
       ],
     },
     web: {

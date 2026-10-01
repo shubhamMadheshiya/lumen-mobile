@@ -4,10 +4,12 @@
  */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 export function DisclaimerBanner() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -38,7 +40,7 @@ export function DisclaimerBanner() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   banner: {
     backgroundColor: palette.info + '14',
     borderRadius: 14, borderWidth: 1.5, borderColor: palette.info + '44',
@@ -51,4 +53,4 @@ const styles = StyleSheet.create({
   summary: { ...typography.small, color: palette.info + 'CC', lineHeight: 18 },
   body: { ...typography.small, color: palette.textSecondary, lineHeight: 20 },
   bold: { fontWeight: '700', color: palette.text },
-});
+}));

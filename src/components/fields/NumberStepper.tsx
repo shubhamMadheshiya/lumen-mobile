@@ -8,7 +8,7 @@ import {
   FlatList, Pressable,
 } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -19,6 +19,7 @@ interface Props {
 }
 
 export function NumberStepper({ field, value, unit, onChange }: Props) {
+  const styles = useStyles();
   const min  = field.min  ?? 0;
   const max  = field.max  ?? 9999;
   const step = field.step ?? 1;
@@ -118,7 +119,7 @@ export function NumberStepper({ field, value, unit, onChange }: Props) {
 
 const BTN = 52;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   btn: {
@@ -163,4 +164,4 @@ const styles = StyleSheet.create({
   pickerItemActive: { backgroundColor: palette.primary },
   pickerItemText: { ...typography.body, color: palette.text },
   pickerItemTextActive: { color: palette.white, fontWeight: '700' },
-});
+}));

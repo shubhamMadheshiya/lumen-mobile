@@ -6,7 +6,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ThemeProvider } from '../src/theme/ThemeContext';
+import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 import { useNotificationSync } from '../src/hooks/useNotificationSync';
 import { flushQueue } from '../src/services/mediaUpload';
 import { useConfigStore } from '../src/store/configStore';
@@ -30,6 +31,7 @@ const queryClient = new QueryClient({
 
 function AppBootstrap() {
   useNotificationSync();
+  const { palette, colorScheme } = useTheme();
   const { fetchConfig } = useConfigStore();
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const fetchProfile = useAuthStore(s => s.fetchProfile);
@@ -42,7 +44,17 @@ function AppBootstrap() {
     }
   }, [isAuthenticated, fetchConfig, fetchProfile]);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: palette.background },
+        }}
+      />
+    </>
+  );
 }
 
 export default function RootLayout() {

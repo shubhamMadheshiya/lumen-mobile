@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft, Play, Footprints, Flame, Timer, TrendingUp } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useActivityStore } from '../../src/store/activityStore';
 import { IActivitySession } from '@lumen/shared';
@@ -31,6 +31,8 @@ function formatDate(iso: string): string {
 }
 
 export default function WalkingDashboardScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const {
     history,
     todaySummary,
@@ -171,7 +173,7 @@ export default function WalkingDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe: {
     flex: 1,
     backgroundColor: palette.background,
@@ -387,4 +389,4 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     marginTop: 2,
   },
-});
+}));

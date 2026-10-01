@@ -11,33 +11,41 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft } from 'lucide-react-native';
+import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft, RotateCcw, BellRing } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
+import { sendTestReminderNotification, requestNotificationPermissions } from '../../src/services/notifications';
 import { IReminder, ReminderCategory } from '@lumen/shared';
 
-const CATEGORY_TABS: Array<{ label: string; value: ReminderCategory | 'ALL' }> = [
+type ReminderTabValue = ReminderCategory | 'ALL' | 'ARCHIVED';
+
+const CATEGORY_TABS: Array<{ label: string; value: ReminderTabValue }> = [
   { label: 'All', value: 'ALL' },
   { label: 'Hydration', value: 'HYDRATION' },
   { label: 'Movement', value: 'MOVEMENT' },
   { label: 'Sleep', value: 'SLEEP' },
   { label: 'Meds', value: 'MEDICATION' },
+  { label: 'Archived', value: 'ARCHIVED' },
 ];
 
 export default function RemindersScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const {
     reminders,
     isLoading,
     fetchReminders,
     toggleReminder,
     deleteReminder,
+    unarchiveReminder,
+    permanentDeleteReminder,
     duplicateReminder,
     snooze,
   } = useReminderStore();
 
-  const [selectedCategory, setSelectedCategory] = useState<ReminderCategory | 'ALL'>('ALL');
+  const [selectedCategory, setSelectedCategory] = useState<ReminderTabValue>('ALL');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -50,6 +58,39 @@ export default function RemindersScreen() {
     setRefreshing(false);
   };
 
+  const [isTestingAlarm, setIsTestingAlarm] = useState(false);
+
+  const handleTestAlarm = async () => {
+    setIsTestingAlarm(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const granted = await requestNotificationPermissions();
+    if (!granted) {
+      setIsTestingAlarm(false);
+      Alert.alert(
+        'Notifications Disabled',
+        'Please enable notifications in your phone settings so Lumen alarms can ring.'
+      );
+      return;
+    }
+
+    const success = await sendTestReminderNotification();
+    setIsTestingAlarm(false);
+    if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        '🔔 Alarm Scheduled (3 Seconds)',
+        'Lock your phone or leave the app open — your reminder alarm will fire in 3 seconds with sound and vibration!',
+        [{ text: 'Got it!' }]
+      );
+    } else {
+      Alert.alert(
+        'Test Failed',
+        'Could not schedule test alarm. Ensure notification permissions are granted in phone settings.'
+      );
+    }
+  };
+
   const handleToggle = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleReminder(id);
@@ -57,12 +98,12 @@ export default function RemindersScreen() {
 
   const handleDelete = (reminder: IReminder) => {
     Alert.alert(
-      'Delete Reminder',
-      `Are you sure you want to remove "${reminder.name}"?`,
+      'Archive Reminder',
+      `Archive "${reminder.name}"? You can view or restore it in the Archived tab.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Archive',
           style: 'destructive',
           onPress: () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -73,7 +114,34 @@ export default function RemindersScreen() {
     );
   };
 
+  const handlePermanentDelete = (reminder: IReminder) => {
+    Alert.alert(
+      'Delete Forever',
+      `Permanently remove "${reminder.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            permanentDeleteReminder(reminder._id);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRestore = (reminder: IReminder) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    unarchiveReminder(reminder._id);
+    Alert.alert('Restored', `Reminder "${reminder.name}" is active again.`);
+  };
+
   const filteredReminders = reminders.filter(r => {
+    const isArchived = !!r.archivedAt;
+    if (selectedCategory === 'ARCHIVED') return isArchived;
+    if (isArchived) return false;
     if (selectedCategory === 'ALL') return true;
     return r.category === selectedCategory;
   });
@@ -107,14 +175,26 @@ export default function RemindersScreen() {
           <ChevronLeft size={24} color={palette.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reminders</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => router.push('/reminders/add')}
-          accessibilityRole="button"
-          accessibilityLabel="Add reminder"
-        >
-          <Plus size={22} color={palette.surface} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.testBtn}
+            onPress={handleTestAlarm}
+            disabled={isTestingAlarm}
+            accessibilityRole="button"
+            accessibilityLabel="Test Alarm"
+          >
+            <BellRing size={15} color={palette.primary} />
+            <Text style={styles.testBtnText}>{isTestingAlarm ? 'Testing...' : 'Test Alarm'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => router.push('/reminders/add')}
+            accessibilityRole="button"
+            accessibilityLabel="Add reminder"
+          >
+            <Plus size={22} color={palette.surface} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Category Filter Tabs */}
@@ -183,28 +263,57 @@ export default function RemindersScreen() {
 
               {/* Card Footer Actions */}
               <View style={styles.cardFooter}>
-                <TouchableOpacity
-                  style={styles.footerAction}
-                  onPress={() => snooze(reminder._id, reminder.snoozeDurationMinutes)}
-                >
-                  <Clock size={14} color={palette.textSecondary} />
-                  <Text style={styles.footerActionText}>Snooze {reminder.snoozeDurationMinutes || 10}m</Text>
-                </TouchableOpacity>
+                {reminder.archivedAt ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.footerAction}
+                      onPress={() => handleRestore(reminder)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Restore reminder"
+                    >
+                      <RotateCcw size={14} color={palette.secondary} />
+                      <Text style={[styles.footerActionText, { color: palette.secondary }]}>Restore reminder</Text>
+                    </TouchableOpacity>
 
-                <View style={styles.footerRight}>
-                  <TouchableOpacity
-                    style={styles.footerIconBtn}
-                    onPress={() => duplicateReminder(reminder._id)}
-                  >
-                    <Copy size={16} color={palette.textSecondary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.footerIconBtn}
-                    onPress={() => handleDelete(reminder)}
-                  >
-                    <Trash2 size={16} color={palette.error} />
-                  </TouchableOpacity>
-                </View>
+                    <View style={styles.footerRight}>
+                      <TouchableOpacity
+                        style={styles.footerIconBtn}
+                        onPress={() => handlePermanentDelete(reminder)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete forever"
+                      >
+                        <Trash2 size={16} color={palette.error} />
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.footerAction}
+                      onPress={() => snooze(reminder._id, reminder.snoozeDurationMinutes)}
+                    >
+                      <Clock size={14} color={palette.textSecondary} />
+                      <Text style={styles.footerActionText}>Snooze {reminder.snoozeDurationMinutes || 10}m</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.footerRight}>
+                      <TouchableOpacity
+                        style={styles.footerIconBtn}
+                        onPress={() => duplicateReminder(reminder._id)}
+                        accessibilityLabel="Duplicate"
+                      >
+                        <Copy size={16} color={palette.textSecondary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.footerIconBtn}
+                        onPress={() => handleDelete(reminder)}
+                        accessibilityLabel="Archive"
+                      >
+                        <Trash2 size={16} color={palette.error} />
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           ))
@@ -216,7 +325,7 @@ export default function RemindersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe: {
     flex: 1,
     backgroundColor: palette.background,
@@ -236,6 +345,27 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h2,
     color: palette.text,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  testBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    backgroundColor: palette.primary + '16',
+    borderWidth: 1,
+    borderColor: palette.primary + '40',
+  },
+  testBtnText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: palette.primary,
   },
   addBtn: {
     width: 36,
@@ -373,4 +503,4 @@ const styles = StyleSheet.create({
   footerIconBtn: {
     padding: 4,
   },
-});
+}));

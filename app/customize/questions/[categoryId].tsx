@@ -10,7 +10,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { IQuestion } from '@lumen/shared';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
-import { palette } from '../../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../../src/theme/ThemeContext';
 import { typography } from '../../../src/theme/typography';
 
 const FREQ_LABEL: Record<string, string> = {
@@ -19,6 +19,7 @@ const FREQ_LABEL: Record<string, string> = {
 };
 
 export default function QuestionsScreen() {
+  const styles = useStyles();
   const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
   const { config, fetchConfig, invalidate } = useConfigStore();
   const [reordering, setReordering] = useState(false);
@@ -56,7 +57,7 @@ export default function QuestionsScreen() {
   const archive = (q: IQuestion) => {
     Alert.alert(
       `Archive "${q.title}"?`,
-      'Existing logs are preserved.',
+      'Existing logs are preserved. You can restore it later at any time.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -64,6 +65,37 @@ export default function QuestionsScreen() {
           onPress: async () => {
             await api.post(`/questions/${q._id}/archive`, {});
             invalidate(); await fetchConfig();
+          },
+        },
+      ],
+    );
+  };
+
+  const unarchive = async (q: IQuestion) => {
+    try {
+      await api.post(`/questions/${q._id}/unarchive`, {});
+      invalidate(); await fetchConfig();
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message || 'Unknown error');
+    }
+  };
+
+  const deletePermanently = (q: IQuestion) => {
+    Alert.alert(
+      `Permanently delete "${q.title}"?`,
+      'This action cannot be undone. Questions with logged data cannot be deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/questions/${q._id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Question deleted.');
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting question');
+            }
           },
         },
       ],
@@ -120,10 +152,35 @@ export default function QuestionsScreen() {
             <View style={styles.archivedSection}>
               <Text style={styles.sectionLabel}>Archived ({archived.length})</Text>
               {archived.map(q => (
-                <TouchableOpacity key={q._id} style={styles.archivedRow} onPress={() => router.push(`/customize/question/${q._id}?categoryId=${categoryId}`)}>
-                  <Text style={styles.archivedTitle}>{q.title}</Text>
-                  <Text style={styles.archivedBadge}>Archived</Text>
-                </TouchableOpacity>
+                <View key={q._id} style={styles.archivedRow}>
+                  <TouchableOpacity
+                    style={styles.archivedRowMain}
+                    onPress={() => router.push(`/customize/question/${q._id}?categoryId=${categoryId}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit archived question ${q.title}`}
+                  >
+                    <Text style={styles.archivedTitle} numberOfLines={1}>{q.title}</Text>
+                    <Text style={styles.archivedBadge}>Archived</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.restoreBtn}
+                    onPress={() => unarchive(q)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Restore ${q.title}`}
+                  >
+                    <Text style={styles.restoreBtnText}>↺ Restore</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteIconBtn}
+                    onPress={() => deletePermanently(q)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${q.title}`}
+                  >
+                    <Text style={styles.deleteIconText}>🗑</Text>
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           ) : null
@@ -143,7 +200,7 @@ export default function QuestionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   list: { padding: 16, paddingBottom: 100, gap: 8 },
   row: { backgroundColor: palette.surface, borderRadius: 14, borderWidth: 1, borderColor: palette.border, overflow: 'hidden' },
@@ -164,9 +221,25 @@ const styles = StyleSheet.create({
   emptyHint: { ...typography.small, color: palette.textDisabled },
   archivedSection: { marginTop: 24, gap: 6 },
   sectionLabel: { ...typography.label, color: palette.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
-  archivedRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 10, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 14, paddingVertical: 12, opacity: 0.7 },
+  archivedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: palette.surface, borderRadius: 10,
+    borderWidth: 1, borderColor: palette.border,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  archivedRowMain: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   archivedTitle: { ...typography.body, color: palette.textSecondary, flex: 1 },
-  archivedBadge: { ...typography.caption, color: palette.textDisabled, backgroundColor: palette.surfaceAlt, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  archivedBadge: { ...typography.caption, color: palette.textDisabled, backgroundColor: palette.surfaceAlt, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  restoreBtn: {
+    backgroundColor: palette.secondary + '18', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: palette.secondary + '50',
+  },
+  restoreBtnText: { ...typography.smallBold, color: palette.secondary },
+  deleteIconBtn: {
+    backgroundColor: palette.error + '14', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: palette.error + '40',
+  },
+  deleteIconText: { fontSize: 14 },
   fab: { position: 'absolute', bottom: 20, alignSelf: 'center', backgroundColor: palette.primary, borderRadius: 24, paddingHorizontal: 28, paddingVertical: 14, shadowColor: palette.primary, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
   fabText: { ...typography.button, color: palette.white },
-});
+}));

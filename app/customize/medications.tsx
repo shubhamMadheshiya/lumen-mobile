@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { api } from '../../src/api/client';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 interface IMedication {
@@ -21,13 +21,15 @@ interface IMedication {
 }
 
 export default function MedicationsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [meds, setMeds] = useState<IMedication[]>([]);
   const [editing, setEditing] = useState<Partial<IMedication> | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const res = await api.get('/medications');
-    setMeds(res.data.medications ?? []);
+    const res: any = await api.get('/medications');
+    setMeds(res.data?.medications ?? res.data ?? []);
   };
   useEffect(() => { load(); }, []);
 
@@ -134,7 +136,7 @@ export default function MedicationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   list: { padding: 16, paddingBottom: 100, gap: 8 },
   hint: { ...typography.small, color: palette.textSecondary, marginBottom: 8 },
@@ -151,7 +153,7 @@ const styles = StyleSheet.create({
   inactiveName: { ...typography.body, color: palette.textSecondary, flex: 1 },
   inactiveBadge: { ...typography.caption, color: palette.textDisabled, backgroundColor: palette.surfaceAlt, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
   fab: { position: 'absolute', bottom: 20, alignSelf: 'center', backgroundColor: palette.primary, borderRadius: 24, paddingHorizontal: 28, paddingVertical: 14, elevation: 8 },
-  fabText: { ...typography.button, color: palette.white },
+  fabText: { ...typography.button, color: '#FFFFFF' },
   modalWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: { backgroundColor: palette.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
@@ -166,4 +168,4 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
   deleteRow: { marginTop: 24, borderRadius: 12, borderWidth: 1, borderColor: palette.error + '55', padding: 12, alignItems: 'center' },
   deleteText: { ...typography.bodyBold, color: palette.error },
-});
+}));

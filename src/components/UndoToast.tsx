@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useRef } from 'react';
 import { Animated, TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { palette } from '../theme/colors';
+import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { useQuickLogStore } from '../store/quickLogStore';
 import { IQuickAction } from '@lumen/shared';
@@ -14,6 +14,7 @@ interface Props {
 }
 
 export function UndoToast({ quickActions }: Props): React.ReactElement | null {
+  const styles = useStyles();
   const { undoEntry, undo } = useQuickLogStore();
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -44,13 +45,15 @@ export function UndoToast({ quickActions }: Props): React.ReactElement | null {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   toast: {
     position: 'absolute',
     bottom: 90,
     left: 16,
     right: 16,
-    backgroundColor: palette.text,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: palette.border,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -66,11 +69,12 @@ const styles = StyleSheet.create({
   },
   message: {
     ...typography.body,
-    color: palette.white,
+    color: palette.text,
     flex: 1,
   },
   bold: {
     fontWeight: '700',
+    color: palette.text,
   },
   undoBtn: {
     marginLeft: 12,
@@ -81,6 +85,6 @@ const styles = StyleSheet.create({
   },
   undoText: {
     ...typography.smallBold,
-    color: palette.white,
+    color: '#FFFFFF',
   },
-});
+}));

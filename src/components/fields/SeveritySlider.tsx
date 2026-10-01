@@ -8,7 +8,7 @@ import {
   View, Text, StyleSheet, PanResponder, LayoutChangeEvent,
 } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -42,6 +42,7 @@ const TRACK_HEIGHT = 8;
 const THUMB_SIZE   = 36;
 
 export function SeveritySlider({ field, value, onChange }: Props) {
+  const styles = useStyles();
   const min  = field.min  ?? 0;
   const max  = field.max  ?? 10;
   const step = field.step ?? 1;
@@ -134,7 +135,7 @@ export function SeveritySlider({ field, value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 8 },
   valueBubble: { alignItems: 'center' },
   valueText: { ...typography.h1, lineHeight: 36, fontWeight: '800' },
@@ -180,4 +181,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: THUMB_SIZE / 2,
   },
   tick: { ...typography.caption, color: palette.textDisabled },
-});
+}));

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useConfigStore } from '../../src/store/configStore';
 
@@ -33,6 +33,8 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export default function CustomizeScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { config, fetchConfig, isLoading } = useConfigStore();
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);
@@ -63,6 +65,7 @@ export default function CustomizeScreen() {
 }
 
 function Chip({ label }: { label: string }) {
+  const chipStyles = useChipStyles();
   return (
     <View style={chipStyles.chip}>
       <Text style={chipStyles.label}>{label}</Text>
@@ -71,6 +74,7 @@ function Chip({ label }: { label: string }) {
 }
 
 function NavCard({ item }: { item: NavItem }) {
+  const navStyles = useNavStyles();
   return (
     <TouchableOpacity
       style={navStyles.card}
@@ -89,7 +93,7 @@ function NavCard({ item }: { item: NavItem }) {
   );
 }
 
-const chipStyles = StyleSheet.create({
+const useChipStyles = createThemedStyles(palette => ({
   chip: {
     backgroundColor: palette.surfaceAlt,
     borderRadius: 100,
@@ -99,9 +103,9 @@ const chipStyles = StyleSheet.create({
     borderColor: palette.border,
   },
   label: { ...typography.small, color: palette.textSecondary },
-});
+}));
 
-const navStyles = StyleSheet.create({
+const useNavStyles = createThemedStyles(palette => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -117,12 +121,12 @@ const navStyles = StyleSheet.create({
   title:    { ...typography.bodyBold, color: palette.text },
   subtitle: { ...typography.small, color: palette.textSecondary, marginTop: 2 },
   chevron:  { ...typography.h3, color: palette.textDisabled, marginLeft: 8 },
-});
+}));
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe:    { flex: 1, backgroundColor: palette.background },
   content: { padding: 16, paddingBottom: 40 },
   heading: { ...typography.h2, color: palette.text, marginBottom: 8 },
   sub:     { ...typography.body, color: palette.textSecondary, marginBottom: 16 },
   chips:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-});
+}));

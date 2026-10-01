@@ -12,7 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { palette } from '../theme/colors';
+import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { useQuickLogStore } from '../store/quickLogStore';
 import { IQuickAction } from '@lumen/shared';
@@ -24,6 +24,8 @@ interface Props {
 }
 
 export function QuickActionButton({ action, onLongPress, onPressOverride }: Props): React.ReactElement {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { todayTaps, tap } = useQuickLogStore();
   const tapData = todayTaps[action._id];
   const count = tapData?.count ?? 0;
@@ -99,7 +101,7 @@ export function QuickActionButton({ action, onLongPress, onPressOverride }: Prop
 
 const BUTTON_SIZE = 90;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   wrapper: {
     width: BUTTON_SIZE,
     alignItems: 'center',
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     ...typography.caption,
-    color: palette.white,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   icon: {
@@ -161,4 +163,4 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 2,
   },
-});
+}));

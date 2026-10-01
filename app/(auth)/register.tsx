@@ -4,12 +4,14 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useAuthStore } from '../../src/store/authStore';
 import { ApiError } from '../../src/api/client';
 
 export default function RegisterScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,7 +74,7 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   container: { flex: 1, backgroundColor: palette.background },
   scroll:    { flexGrow: 1, padding: 24, paddingTop: 60 },
   back:      { marginBottom: 24 },
@@ -90,9 +92,9 @@ const styles = StyleSheet.create({
     padding: 16, alignItems: 'center', minHeight: 52, marginTop: 4,
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { ...typography.button, color: palette.white },
+  buttonText: { ...typography.button, color: '#FFFFFF' },
   disclaimer: {
     ...typography.caption, color: palette.textDisabled,
     textAlign: 'center', marginTop: 32, lineHeight: 18,
   },
-});
+}));

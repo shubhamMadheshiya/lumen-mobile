@@ -1,7 +1,9 @@
 import { Tabs } from 'expo-router';
-import { palette } from '../../src/theme/colors';
+import { useTheme } from '../../src/theme/ThemeContext';
 
 export default function TabLayout() {
+  const { palette } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
@@ -52,7 +54,7 @@ export default function TabLayout() {
   );
 }
 
-function TabIcon({ emoji, color }: { emoji: string; color: string }) {
+function TabIcon({ emoji, color }: { emoji: string; color: any }) {
   const { Text } = require('react-native');
   return <Text style={{ fontSize: 22 }}>{emoji}</Text>;
 }

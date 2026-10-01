@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -22,6 +22,7 @@ interface Props {
 const MAX_IMAGES = 4;
 
 export function ImageField({ field, value, onChange }: Props) {
+  const styles = useStyles();
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const sensitive = field.sensitive ?? false;
 
@@ -144,7 +145,7 @@ export function ImageField({ field, value, onChange }: Props) {
 
 const THUMB = 96;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 10 },
   strip: { gap: 10, paddingVertical: 4 },
   thumbWrapper: { position: 'relative' },
@@ -186,4 +187,4 @@ const styles = StyleSheet.create({
   },
   sensitiveText: { ...typography.small, color: palette.textSecondary },
   hint: { ...typography.small, color: palette.textSecondary },
-});
+}));

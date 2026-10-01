@@ -18,7 +18,7 @@ import { router } from 'expo-router';
 import { Footprints, Play, Bell, ChevronRight, Droplets, Clock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useAuthStore } from '../../src/store/authStore';
 import { useConfigStore } from '../../src/store/configStore';
@@ -34,6 +34,8 @@ import { FlareNowButton } from '../../src/components/FlareNowButton';
 import { WaterQuantityModal } from '../../src/components/WaterQuantityModal';
 
 export default function TodayScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { user } = useAuthStore();
   const { config, fetchConfig } = useConfigStore();
   const { fetchTodaySession } = useDaySessionStore();
@@ -275,6 +277,7 @@ export default function TodayScreen() {
 }
 
 function GlanceCard({ emoji, value, label, color }: { emoji: string; value: string; label: string; color: string }) {
+  const styles = useStyles();
   return (
     <View style={[styles.glanceCard, { borderLeftColor: color }]}>
       <Text style={styles.glanceEmoji}>{emoji}</Text>
@@ -284,7 +287,7 @@ function GlanceCard({ emoji, value, label, color }: { emoji: string; value: stri
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   safe: {
     flex: 1,
     backgroundColor: palette.background,
@@ -535,4 +538,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-});
+}));

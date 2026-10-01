@@ -10,10 +10,12 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { IOption } from '@lumen/shared';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
-import { palette } from '../../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../../src/theme/ThemeContext';
 import { typography } from '../../../src/theme/typography';
 
 export default function OptionsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { questionId } = useLocalSearchParams<{ questionId: string }>();
   const { config, fetchConfig, invalidate } = useConfigStore();
   const [reordering, setReordering] = useState(false);
@@ -40,7 +42,7 @@ export default function OptionsScreen() {
   };
 
   const archive = (opt: IOption) => {
-    Alert.alert(`Archive "${opt.label}"?`, 'Past logs are kept.', [
+    Alert.alert(`Archive "${opt.label}"?`, 'Past logs are kept. You can restore it later at any time.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Archive', style: 'destructive',
@@ -50,6 +52,37 @@ export default function OptionsScreen() {
         },
       },
     ]);
+  };
+
+  const unarchive = async (opt: IOption) => {
+    try {
+      await api.post(`/options/${opt._id}/unarchive`, {});
+      invalidate(); await fetchConfig();
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message || 'Unknown error');
+    }
+  };
+
+  const deletePermanently = (opt: IOption) => {
+    Alert.alert(
+      `Permanently delete "${opt.label}"?`,
+      'This action cannot be undone. Options with logged data cannot be deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/options/${opt._id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Option deleted.');
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting option');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const renderRow = ({ item, index }: { item: IOption; index: number }) => (
@@ -103,10 +136,35 @@ export default function OptionsScreen() {
             <View style={styles.archivedSection}>
               <Text style={styles.sectionLabel}>Archived ({archived.length})</Text>
               {archived.map(o => (
-                <TouchableOpacity key={o._id} style={styles.archivedRow} onPress={() => router.push(`/customize/option/${o._id}?questionId=${questionId}`)}>
-                  <Text style={styles.archivedLabel}>{o.label}</Text>
-                  <Text style={styles.archivedBadge}>Archived</Text>
-                </TouchableOpacity>
+                <View key={o._id} style={styles.archivedRow}>
+                  <TouchableOpacity
+                    style={styles.archivedRowMain}
+                    onPress={() => router.push(`/customize/option/${o._id}?questionId=${questionId}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit archived option ${o.label}`}
+                  >
+                    <Text style={styles.archivedLabel} numberOfLines={1}>{o.label}</Text>
+                    <Text style={styles.archivedBadge}>Archived</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.restoreBtn}
+                    onPress={() => unarchive(o)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Restore ${o.label}`}
+                  >
+                    <Text style={styles.restoreBtnText}>↺ Restore</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteIconBtn}
+                    onPress={() => deletePermanently(o)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${o.label}`}
+                  >
+                    <Text style={styles.deleteIconText}>🗑</Text>
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           ) : null
@@ -126,7 +184,7 @@ export default function OptionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   list: { padding: 16, paddingBottom: 100, gap: 8 },
   row: { backgroundColor: palette.surface, borderRadius: 14, borderWidth: 1, borderColor: palette.border, overflow: 'hidden' },
@@ -148,9 +206,25 @@ const styles = StyleSheet.create({
   emptyHint: { ...typography.small, color: palette.textDisabled },
   archivedSection: { marginTop: 24, gap: 6 },
   sectionLabel: { ...typography.label, color: palette.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
-  archivedRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 10, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 14, paddingVertical: 12, opacity: 0.7 },
+  archivedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: palette.surface, borderRadius: 10,
+    borderWidth: 1, borderColor: palette.border,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  archivedRowMain: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   archivedLabel: { ...typography.body, color: palette.textSecondary, flex: 1 },
-  archivedBadge: { ...typography.caption, color: palette.textDisabled, backgroundColor: palette.surfaceAlt, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  archivedBadge: { ...typography.caption, color: palette.textDisabled, backgroundColor: palette.surfaceAlt, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  restoreBtn: {
+    backgroundColor: palette.secondary + '18', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: palette.secondary + '50',
+  },
+  restoreBtnText: { ...typography.smallBold, color: palette.secondary },
+  deleteIconBtn: {
+    backgroundColor: palette.error + '14', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: palette.error + '40',
+  },
+  deleteIconText: { fontSize: 14 },
   fab: { position: 'absolute', bottom: 20, alignSelf: 'center', backgroundColor: palette.primary, borderRadius: 24, paddingHorizontal: 28, paddingVertical: 14, shadowColor: palette.primary, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
   fabText: { ...typography.button, color: palette.white },
-});
+}));

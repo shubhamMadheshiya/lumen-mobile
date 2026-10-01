@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { IQuestion, IOption, Answer } from '@lumen/shared';
-import { palette } from '../theme/colors';
+import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { OptionSelector } from './OptionSelector';
 
@@ -37,6 +37,8 @@ export function QuestionCard({
   onChange,
   tempPrefUnit = 'C',
 }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   if (!isVisible(question, sessionAnswers)) return null;
 
   const activeOptions = options
@@ -74,7 +76,7 @@ export function QuestionCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   card: {
     backgroundColor: palette.surface,
     borderRadius: 16, borderWidth: 1, borderColor: palette.border,
@@ -87,4 +89,4 @@ const styles = StyleSheet.create({
   title: { ...typography.h4, color: palette.text, flex: 1 },
   required: { ...typography.h4, color: palette.error },
   helpText: { ...typography.small, color: palette.textSecondary },
-});
+}));

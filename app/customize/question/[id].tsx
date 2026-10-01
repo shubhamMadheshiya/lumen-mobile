@@ -12,7 +12,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { IQuestion, QuestionFrequency, SelectionType } from '@lumen/shared';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
-import { palette } from '../../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../../src/theme/ThemeContext';
 import { typography } from '../../../src/theme/typography';
 import { IconPicker } from '../../../src/components/customize/IconPicker';
 
@@ -25,6 +25,8 @@ const FREQ_OPTIONS: { value: QuestionFrequency; label: string }[] = [
 ];
 
 export default function QuestionEditor() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { id, categoryId } = useLocalSearchParams<{ id: string; categoryId: string }>();
   const isNew = id === 'new';
   const { config, invalidate, fetchConfig } = useConfigStore();
@@ -80,19 +82,60 @@ export default function QuestionEditor() {
     } finally { setSaving(false); }
   };
 
+  const isArchived = existing ? (!existing.isActive || !!existing.archivedAt) : false;
+
   const handleArchive = () => {
     if (isNew) return;
-    Alert.alert(`Archive "${title}"?`, 'Existing log entries are preserved.', [
+    Alert.alert(`Archive "${title}"?`, 'Existing log entries are preserved. You can restore it later.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Archive', style: 'destructive',
         onPress: async () => {
-          await api.post(`/questions/${id}/archive`, {});
-          invalidate(); await fetchConfig();
-          router.back();
+          try {
+            await api.post(`/questions/${id}/archive`, {});
+            invalidate(); await fetchConfig();
+            router.back();
+          } catch (err: any) {
+            Alert.alert('Archive failed', err?.message || 'Unknown error');
+          }
         },
       },
     ]);
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      await api.post(`/questions/${id}/unarchive`, {});
+      invalidate(); await fetchConfig();
+      Alert.alert('Question Restored', `"${title}" is active again.`);
+      router.back();
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message || 'Unknown error');
+    }
+  };
+
+  const handlePermanentDelete = () => {
+    if (isNew) return;
+    Alert.alert(
+      `Permanently delete "${title}"?`,
+      'This action cannot be undone. If tracking entries have been logged for this question, deletion will be blocked to protect your records.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/questions/${id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Question deleted permanently.');
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting question');
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -100,6 +143,14 @@ export default function QuestionEditor() {
       <Stack.Screen options={{ title: isNew ? 'New question' : 'Edit question' }} />
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+
+        {isArchived && (
+          <View style={styles.archivedNotice}>
+            <Text style={styles.archivedNoticeText}>
+              📁 This question is currently archived. It will not appear in tracking forms until restored.
+            </Text>
+          </View>
+        )}
 
         <Field label="Question title *">
           <TextInput
@@ -179,9 +230,21 @@ export default function QuestionEditor() {
         )}
 
         {!isNew && (
-          <TouchableOpacity style={styles.archiveBtn} onPress={handleArchive}>
-            <Text style={styles.archiveBtnText}>Archive this question</Text>
-          </TouchableOpacity>
+          <View style={styles.actionSection}>
+            {isArchived ? (
+              <TouchableOpacity style={styles.unarchiveBtn} onPress={handleUnarchive} accessibilityRole="button">
+                <Text style={styles.unarchiveBtnText}>↺  Restore / Unarchive question</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.archiveBtn} onPress={handleArchive} accessibilityRole="button">
+                <Text style={styles.archiveBtnText}>Archive this question</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.deleteBtn} onPress={handlePermanentDelete} accessibilityRole="button">
+              <Text style={styles.deleteBtnText}>🗑  Delete permanently</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={{ height: 40 }} />
@@ -197,6 +260,7 @@ export default function QuestionEditor() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const fieldStyles = useFieldStyles();
   return (
     <View style={fieldStyles.wrapper}>
       <Text style={fieldStyles.label}>{label}</Text>
@@ -206,6 +270,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function ToggleRow({ label, desc, value, onChange }: { label: string; desc: string; value: boolean; onChange: (v: boolean) => void }) {
+  const { palette } = useTheme();
+  const toggleStyles = useToggleStyles();
   return (
     <View style={toggleStyles.row}>
       <View style={toggleStyles.text}>
@@ -221,12 +287,12 @@ function ToggleRow({ label, desc, value, onChange }: { label: string; desc: stri
   );
 }
 
-const fieldStyles = StyleSheet.create({
+const useFieldStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 6 },
   label: { ...typography.smallBold, color: palette.textSecondary },
-});
+}));
 
-const toggleStyles = StyleSheet.create({
+const useToggleStyles = createThemedStyles((palette) => ({
   row: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: palette.surface, borderRadius: 12,
@@ -236,9 +302,9 @@ const toggleStyles = StyleSheet.create({
   text: { flex: 1 },
   label: { ...typography.body, color: palette.text },
   desc: { ...typography.small, color: palette.textSecondary, marginTop: 2 },
-});
+}));
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   scroll: { padding: 16, gap: 16, paddingBottom: 100 },
   input: {
@@ -268,12 +334,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
   },
   optionsLinkText: { ...typography.bodyBold, color: palette.primary },
+  archivedNotice: {
+    backgroundColor: palette.warning + '18',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.warning + '40',
+    padding: 14,
+  },
+  archivedNoticeText: { ...typography.small, color: palette.warning, lineHeight: 18 },
+  actionSection: { gap: 10, marginTop: 12 },
+  unarchiveBtn: {
+    backgroundColor: palette.secondary + '18', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.secondary + '60',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  unarchiveBtnText: { ...typography.bodyBold, color: palette.secondary },
   archiveBtn: {
+    backgroundColor: palette.warning + '12', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.warning + '40',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  archiveBtnText: { ...typography.bodyBold, color: palette.warning },
+  deleteBtn: {
     backgroundColor: palette.error + '12', borderRadius: 12,
     borderWidth: 1, borderColor: palette.error + '40',
     paddingVertical: 14, alignItems: 'center',
   },
-  archiveBtnText: { ...typography.bodyBold, color: palette.error },
+  deleteBtnText: { ...typography.bodyBold, color: palette.error },
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: 16, paddingBottom: 28, backgroundColor: palette.surface,
@@ -285,4 +372,4 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.6 },
   saveBtnText: { ...typography.button, color: palette.white },
-});
+}));

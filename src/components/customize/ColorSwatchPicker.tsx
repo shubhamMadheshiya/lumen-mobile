@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 export const PRESET_COLORS = [
@@ -22,6 +22,7 @@ interface Props {
 }
 
 export function ColorSwatchPicker({ value, onChange, label = 'Color' }: Props) {
+  const styles = useStyles();
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
@@ -47,7 +48,7 @@ export function ColorSwatchPicker({ value, onChange, label = 'Color' }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 8 },
   label: { ...typography.smallBold, color: palette.textSecondary },
   row: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
@@ -61,4 +62,4 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   check: { color: palette.white, fontWeight: '800', fontSize: 16 },
-});
+}));

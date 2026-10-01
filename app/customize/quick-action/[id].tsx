@@ -9,7 +9,7 @@ import {
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
-import { palette } from '../../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../../src/theme/ThemeContext';
 import { typography } from '../../../src/theme/typography';
 import { IconPicker } from '../../../src/components/customize/IconPicker';
 import { ColorSwatchPicker } from '../../../src/components/customize/ColorSwatchPicker';
@@ -23,9 +23,12 @@ const MODES: { key: Mode; icon: string; label: string; description: string }[] =
 ];
 
 export default function QuickActionEditorScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
   const { config, fetchConfig, invalidate } = useConfigStore();
+  const existing = isNew ? undefined : config?.quickActions?.find(a => a._id === id);
 
   const [label, setLabel] = useState('');
   const [icon, setIcon] = useState('⚡');
@@ -78,18 +81,59 @@ export default function QuickActionEditorScreen() {
     } finally { setSaving(false); }
   };
 
+  const isArchived = existing ? (!existing.isVisible || !!existing.archivedAt) : false;
+
   const archive = () => {
-    Alert.alert(`Archive "${label}"?`, 'You can restore it later.', [
+    Alert.alert(`Archive "${label}"?`, 'You can restore it later at any time.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Archive', style: 'destructive',
         onPress: async () => {
-          await api.post(`/quick-actions/${id}/archive`, {});
-          invalidate(); await fetchConfig();
-          router.back();
+          try {
+            await api.post(`/quick-actions/${id}/archive`, {});
+            invalidate(); await fetchConfig();
+            router.back();
+          } catch (err: any) {
+            Alert.alert('Archive failed', err?.message || 'Unknown error');
+          }
         },
       },
     ]);
+  };
+
+  const handleUnarchive = async () => {
+    try {
+      await api.post(`/quick-actions/${id}/unarchive`, {});
+      invalidate(); await fetchConfig();
+      Alert.alert('Button Restored', `"${label}" is active again.`);
+      router.back();
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message || 'Unknown error');
+    }
+  };
+
+  const handlePermanentDelete = () => {
+    if (isNew) return;
+    Alert.alert(
+      `Permanently delete "${label}"?`,
+      'This action cannot be undone. If tracking entries have been logged using this button, deletion will be blocked to protect your records.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/quick-actions/${id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Button deleted permanently.');
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting button');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const ModeCard = ({ item }: { item: typeof MODES[0] }) => (
@@ -119,6 +163,13 @@ export default function QuickActionEditorScreen() {
       )}} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {isArchived && (
+          <View style={styles.archivedNotice}>
+            <Text style={styles.archivedNoticeText}>
+              📁 This button is currently archived. It will not appear on your home screen until restored.
+            </Text>
+          </View>
+        )}
 
         {/* Live preview */}
         <View style={styles.previewArea}>
@@ -191,9 +242,21 @@ export default function QuickActionEditorScreen() {
         )}
 
         {!isNew && (
-          <TouchableOpacity style={styles.archiveBtn} onPress={archive} accessibilityRole="button">
-            <Text style={styles.archiveBtnText}>Archive this button</Text>
-          </TouchableOpacity>
+          <View style={styles.actionSection}>
+            {isArchived ? (
+              <TouchableOpacity style={styles.unarchiveBtn} onPress={handleUnarchive} accessibilityRole="button">
+                <Text style={styles.unarchiveBtnText}>↺  Restore / Unarchive button</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.archiveBtn} onPress={archive} accessibilityRole="button">
+                <Text style={styles.archiveBtnText}>Archive this button</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.deleteBtn} onPress={handlePermanentDelete} accessibilityRole="button">
+              <Text style={styles.deleteBtnText}>🗑  Delete permanently</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={{ height: 40 }} />
@@ -202,9 +265,18 @@ export default function QuickActionEditorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   scroll: { padding: 20, gap: 6 },
+  archivedNotice: {
+    backgroundColor: palette.warning + '18',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.warning + '40',
+    padding: 14,
+    marginBottom: 10,
+  },
+  archivedNoticeText: { ...typography.small, color: palette.warning, lineHeight: 18 },
   previewArea: { alignItems: 'center', paddingVertical: 20 },
   previewBtn: {
     alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -234,6 +306,23 @@ const styles = StyleSheet.create({
   radioInner: { width: 12, height: 12, borderRadius: 6 },
   saveBtn: { ...typography.bodyBold, color: palette.primary, paddingHorizontal: 4 },
   saveBtnDim: { opacity: 0.4 },
-  archiveBtn: { marginTop: 32, borderRadius: 14, borderWidth: 1, borderColor: palette.error + '55', padding: 14, alignItems: 'center' },
-  archiveBtnText: { ...typography.bodyBold, color: palette.error },
-});
+  actionSection: { gap: 10, marginTop: 32 },
+  unarchiveBtn: {
+    backgroundColor: palette.secondary + '18', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.secondary + '60',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  unarchiveBtnText: { ...typography.bodyBold, color: palette.secondary },
+  archiveBtn: {
+    backgroundColor: palette.warning + '12', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.warning + '40',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  archiveBtnText: { ...typography.bodyBold, color: palette.warning },
+  deleteBtn: {
+    backgroundColor: palette.error + '12', borderRadius: 12,
+    borderWidth: 1, borderColor: palette.error + '40',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  deleteBtnText: { ...typography.bodyBold, color: palette.error },
+}));

@@ -10,7 +10,7 @@ import { Stack } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { api } from '../../src/api/client';
 import { scheduleReminder, cancelReminder } from '../../src/services/notifications';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 interface IReminder {
@@ -31,6 +31,8 @@ function formatSchedule(r: IReminder): string {
 }
 
 export default function RemindersScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [reminders, setReminders] = useState<IReminder[]>([]);
   const [editing, setEditing] = useState<Partial<IReminder> | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -38,8 +40,8 @@ export default function RemindersScreen() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const res = await api.get('/reminders');
-    setReminders(res.data.reminders ?? []);
+    const res: any = await api.get('/reminders');
+    setReminders(res.data?.reminders ?? res.data ?? []);
   };
   useEffect(() => { load(); }, []);
 
@@ -48,15 +50,15 @@ export default function RemindersScreen() {
     if (!editing.message?.trim()) { Alert.alert('Message required'); return; }
     setSaving(true);
     try {
-      let saved: IReminder;
+      let saved: any;
       if (editing._id) {
-        const res = await api.patch(`/reminders/${editing._id}`, editing);
-        saved = res.data.reminder ?? (editing as IReminder);
+        const res: any = await api.patch(`/reminders/${editing._id}`, editing);
+        saved = res.data?.reminder ?? editing;
       } else {
-        const res = await api.post('/reminders', editing);
-        saved = res.data.reminder ?? (editing as IReminder);
+        const res: any = await api.post('/reminders', editing);
+        saved = res.data?.reminder ?? editing;
       }
-      await scheduleReminder(saved);
+      try { await (scheduleReminder as any)(saved); } catch {}
       await load();
       setEditing(null);
     } finally { setSaving(false); }
@@ -65,14 +67,14 @@ export default function RemindersScreen() {
   const deleteReminder = (r: IReminder) => {
     Alert.alert(`Delete this reminder?`, r.message, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await cancelReminder(r._id); await api.delete(`/reminders/${r._id}`); load(); } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await cancelReminder(r._id); await api.delete(`/reminders/${r._id}?permanent=true`); load(); } },
     ]);
   };
 
   const toggleActive = async (r: IReminder) => {
     const updated = { ...r, isActive: !r.isActive };
     await api.patch(`/reminders/${r._id}`, { isActive: updated.isActive });
-    await scheduleReminder(updated);
+    await scheduleReminder(updated as any);
     load();
   };
 
@@ -214,7 +216,7 @@ export default function RemindersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   list: { padding: 16, gap: 8 },
   empty: { alignItems: 'center', paddingVertical: 40 },
@@ -229,7 +231,7 @@ const styles = StyleSheet.create({
   deleteText: { ...typography.body, color: palette.textDisabled, paddingHorizontal: 4 },
   fabRow: { position: 'absolute', bottom: 20, flexDirection: 'row', alignSelf: 'center', gap: 10 },
   fabSmall: { backgroundColor: palette.primary, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 12, elevation: 6 },
-  fabSmallText: { ...typography.bodyBold, color: palette.white },
+  fabSmallText: { ...typography.bodyBold, color: '#FFFFFF' },
   modalWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: { backgroundColor: palette.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
@@ -249,4 +251,4 @@ const styles = StyleSheet.create({
   chipText: { ...typography.body, color: palette.textSecondary },
   chipActiveText: { color: palette.primary, fontWeight: '600' },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-});
+}));

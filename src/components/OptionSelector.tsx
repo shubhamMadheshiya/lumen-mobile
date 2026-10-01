@@ -9,7 +9,7 @@ import {
   Platform, UIManager,
 } from 'react-native';
 import { IOption, Answer, FieldValue } from '@lumen/shared';
-import { palette } from '../theme/colors';
+import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { DynamicField } from './fields/DynamicField';
 
@@ -51,6 +51,8 @@ export function OptionSelector({
   onChange,
   tempPrefUnit = 'C',
 }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [otherText, setOtherText] = useState(
     answers.find(a => a.optionId === '__other__')?.otherText ?? ''
   );
@@ -218,7 +220,7 @@ export function OptionSelector({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   wrapper: { gap: 8 },
   option: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -236,7 +238,7 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: palette.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  checkmark: { ...typography.caption, color: palette.white, fontWeight: '700', lineHeight: 14 },
+  checkmark: { ...typography.caption, color: '#FFFFFF', fontWeight: '700', lineHeight: 14 },
   expandedArea: {
     marginTop: -8,
     marginBottom: 4,
@@ -265,4 +267,4 @@ const styles = StyleSheet.create({
     ...typography.body, color: palette.text,
     minHeight: 52,
   },
-});
+}));

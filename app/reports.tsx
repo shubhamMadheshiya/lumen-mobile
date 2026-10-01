@@ -13,7 +13,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useConfigStore } from '../src/store/configStore';
 import { apiDownload } from '../src/api/client';
-import { palette } from '../src/theme/colors';
+import { useTheme, createThemedStyles } from '../src/theme/ThemeContext';
 import { typography } from '../src/theme/typography';
 
 type Format = 'pdf' | 'csv';
@@ -22,6 +22,8 @@ function toDateStr(d: Date) { return d.toLocaleDateString(undefined, { year: 'nu
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
 
 export default function ReportsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { config } = useConfigStore();
 
   const [fromDate, setFromDate] = useState(() => {
@@ -68,7 +70,8 @@ export default function ReportsScreen() {
 
       const mimeType = format === 'pdf' ? 'application/pdf' : 'text/csv';
       const filename = `lumen-report-${isoDate(fromDate)}-to-${isoDate(toDate)}.${format}`;
-      const path = `${FileSystem.cacheDirectory}${filename}`;
+      const cacheDir = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || '';
+      const path = `${cacheDir}${filename}`;
 
       await FileSystem.writeAsStringAsync(path, base64, {
         encoding: FileSystem.EncodingType.Base64,
@@ -203,7 +206,7 @@ export default function ReportsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   scroll: { padding: 20, gap: 8 },
   sectionLabel: { ...typography.label, color: palette.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 6 },
@@ -229,6 +232,6 @@ const styles = StyleSheet.create({
   privacyText: { ...typography.small, color: palette.textSecondary },
   bold: { fontWeight: '700', color: palette.text },
   exportBtn: { backgroundColor: palette.primary, borderRadius: 16, padding: 16, alignItems: 'center', marginTop: 8 },
-  exportBtnText: { ...typography.button, color: palette.white },
+  exportBtnText: { ...typography.button, color: '#FFFFFF' },
   dim: { opacity: 0.5 },
-});
+}));

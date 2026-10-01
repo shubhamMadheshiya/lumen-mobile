@@ -9,7 +9,7 @@ import { Stack, router } from 'expo-router';
 import { IQuickAction } from '@lumen/shared';
 import { useConfigStore } from '../../src/store/configStore';
 import { api } from '../../src/api/client';
-import { palette } from '../../src/theme/colors';
+import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 
 const MODE_LABEL: Record<string, string> = {
@@ -17,6 +17,8 @@ const MODE_LABEL: Record<string, string> = {
 };
 
 export default function QuickActionsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const { config, fetchConfig, invalidate } = useConfigStore();
   const [reordering, setReordering] = useState(false);
 
@@ -29,6 +31,28 @@ export default function QuickActionsScreen() {
   const toggleVisible = async (action: IQuickAction) => {
     await api.patch(`/quick-actions/${action._id}`, { isVisible: !action.isVisible });
     invalidate(); await fetchConfig();
+  };
+
+  const deletePermanently = (action: IQuickAction) => {
+    Alert.alert(
+      `Permanently delete "${action.label}"?`,
+      'This action cannot be undone. Quick actions with logged history cannot be deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res: any = await api.delete(`/quick-actions/${action._id}`);
+              invalidate(); await fetchConfig();
+              Alert.alert('Deleted', res.message || 'Quick action deleted.');
+            } catch (err: any) {
+              Alert.alert('Cannot Delete', err?.message || 'Error deleting button');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const move = async (action: IQuickAction, dir: 'up' | 'down') => {
@@ -88,13 +112,28 @@ export default function QuickActionsScreen() {
         ListFooterComponent={
           hidden.length > 0 ? (
             <View style={styles.hiddenSection}>
-              <Text style={styles.sectionLabel}>Hidden ({hidden.length})</Text>
+              <Text style={styles.sectionLabel}>Archived / Hidden ({hidden.length})</Text>
               {hidden.map(a => (
-                <TouchableOpacity key={a._id} style={styles.hiddenRow} onPress={() => router.push(`/customize/quick-action/${a._id}`)}>
-                  <Text style={styles.hiddenIcon}>{a.icon}</Text>
-                  <Text style={styles.hiddenLabel}>{a.label}</Text>
-                  <Switch value={false} onValueChange={() => toggleVisible(a)} trackColor={{ false: palette.border, true: palette.primary + '88' }} thumbColor={palette.textDisabled} />
-                </TouchableOpacity>
+                <View key={a._id} style={styles.hiddenRow}>
+                  <TouchableOpacity style={styles.hiddenRowMain} onPress={() => router.push(`/customize/quick-action/${a._id}`)}>
+                    <Text style={styles.hiddenIcon}>{a.icon}</Text>
+                    <Text style={styles.hiddenLabel} numberOfLines={1}>{a.label}</Text>
+                  </TouchableOpacity>
+                  <Switch
+                    value={false}
+                    onValueChange={() => toggleVisible(a)}
+                    trackColor={{ false: palette.border, true: palette.primary + '88' }}
+                    thumbColor={palette.textDisabled}
+                  />
+                  <TouchableOpacity
+                    style={styles.deleteIconBtn}
+                    onPress={() => deletePermanently(a)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${a.label}`}
+                  >
+                    <Text style={styles.deleteIconText}>🗑</Text>
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           ) : null
@@ -114,7 +153,7 @@ export default function QuickActionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles(palette => ({
   screen: { flex: 1, backgroundColor: palette.background },
   list: { padding: 16, paddingBottom: 100, gap: 8 },
   hint: { ...typography.small, color: palette.textSecondary, marginBottom: 8 },
@@ -133,9 +172,15 @@ const styles = StyleSheet.create({
   editBtnText: { ...typography.small, color: palette.primary },
   hiddenSection: { marginTop: 24, gap: 6 },
   sectionLabel: { ...typography.label, color: palette.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
-  hiddenRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 14, paddingVertical: 12, gap: 10, opacity: 0.7 },
+  hiddenRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
+  hiddenRowMain: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   hiddenIcon: { fontSize: 20 },
   hiddenLabel: { ...typography.body, color: palette.textSecondary, flex: 1 },
+  deleteIconBtn: {
+    backgroundColor: palette.error + '14', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: palette.error + '40',
+  },
+  deleteIconText: { fontSize: 14 },
   fab: { position: 'absolute', bottom: 20, alignSelf: 'center', backgroundColor: palette.primary, borderRadius: 24, paddingHorizontal: 28, paddingVertical: 14, shadowColor: palette.primary, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
-  fabText: { ...typography.button, color: palette.white },
-});
+  fabText: { ...typography.button, color: '#FFFFFF' },
+}));

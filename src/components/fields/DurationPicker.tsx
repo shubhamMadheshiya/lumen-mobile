@@ -7,7 +7,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Pressable,
 } from 'react-native';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Props {
@@ -26,6 +26,8 @@ function fmtDuration(s: number) {
 }
 
 export function DurationPicker({ field, value, onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const [mode, setMode] = useState<'manual' | 'timer'>('manual');
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -140,7 +142,7 @@ export function DurationPicker({ field, value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 12 },
   tabs: {
     flexDirection: 'row',
@@ -180,4 +182,4 @@ const styles = StyleSheet.create({
   resetBtn: { backgroundColor: palette.surfaceAlt, borderWidth: 1, borderColor: palette.border },
   timerBtnText: { ...typography.button, color: palette.white },
   hint: { ...typography.small, color: palette.textSecondary },
-});
+}));

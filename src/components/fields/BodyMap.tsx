@@ -7,7 +7,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Svg, { Ellipse, Rect, Path, G, Text as SvgText } from 'react-native-svg';
 import { FieldDefinition } from '@lumen/shared';
-import { palette } from '../../theme/colors';
+import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
 interface Region {
@@ -51,6 +51,8 @@ interface Props {
 }
 
 export function BodyMap({ field, value, onChange }: Props) {
+  const { palette } = useTheme();
+  const styles = useStyles();
   const toggle = (key: string) => {
     onChange(
       value.includes(key) ? value.filter(k => k !== key) : [...value, key],
@@ -115,7 +117,7 @@ export function BodyMap({ field, value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   wrapper: { gap: 10, alignItems: 'center' },
   svgContainer: {
     borderWidth: 1, borderColor: palette.border,
@@ -131,4 +133,4 @@ const styles = StyleSheet.create({
   chipText: { ...typography.small, color: palette.error, fontWeight: '600' },
   instruction: { ...typography.small, color: palette.textSecondary, textAlign: 'center' },
   hint: { ...typography.small, color: palette.textSecondary },
-});
+}));

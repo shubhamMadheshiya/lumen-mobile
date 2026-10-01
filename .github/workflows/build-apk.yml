@@ -32,6 +32,7 @@ jobs:
         run: |
           echo "EXPO_PUBLIC_API_URL=https://lumen-be.onrender.com/api/v1" >> .env
           echo "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=403396597474-jnou0b8qhvmqub6ev8p9t5baqopd33cj.apps.googleusercontent.com" >> .env
+          echo "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=403396597474-7hh9bom8au2jv06aimls4cac72cmbi3q.apps.googleusercontent.com" >> .env
 
       - name: Expo Prebuild Android
         run: npx expo prebuild --platform android --clean

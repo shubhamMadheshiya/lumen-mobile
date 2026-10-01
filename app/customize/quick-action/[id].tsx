@@ -7,6 +7,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert,
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { safeGoBack } from '../../../src/utils/navigation';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
 import { useTheme, createThemedStyles } from '../../../src/theme/ThemeContext';
@@ -92,7 +93,7 @@ export default function QuickActionEditorScreen() {
           try {
             await api.post(`/quick-actions/${id}/archive`, {});
             invalidate(); await fetchConfig();
-            router.back();
+            safeGoBack('/customize/quick-actions');
           } catch (err: any) {
             Alert.alert('Archive failed', err?.message || 'Unknown error');
           }
@@ -106,7 +107,7 @@ export default function QuickActionEditorScreen() {
       await api.post(`/quick-actions/${id}/unarchive`, {});
       invalidate(); await fetchConfig();
       Alert.alert('Button Restored', `"${label}" is active again.`);
-      router.back();
+      safeGoBack('/customize/quick-actions');
     } catch (err: any) {
       Alert.alert('Restore failed', err?.message || 'Unknown error');
     }
@@ -126,7 +127,7 @@ export default function QuickActionEditorScreen() {
               const res: any = await api.delete(`/quick-actions/${id}`);
               invalidate(); await fetchConfig();
               Alert.alert('Deleted', res.message || 'Button deleted permanently.');
-              router.back();
+              safeGoBack('/customize/quick-actions');
             } catch (err: any) {
               Alert.alert('Cannot Delete', err?.message || 'Error deleting button');
             }

@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigation';
 import { ChevronLeft, Check, Sparkles, AlertCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useConfigStore } from '../../src/store/configStore';
@@ -65,7 +66,7 @@ export default function QuickLogQuestionsScreen() {
           headerLeft: () => (
             <TouchableOpacity
               style={styles.backBtn}
-              onPress={() => router.back()}
+              onPress={() => safeGoBack('/quick-log')}
               accessibilityRole="button"
               accessibilityLabel="Back"
             >
@@ -181,7 +182,7 @@ export default function QuickLogQuestionsScreen() {
           style={styles.doneBtn}
           onPress={() => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            router.back();
+            safeGoBack('/quick-log');
           }}
           accessibilityRole="button"
           accessibilityLabel="Save Quick Log configuration"

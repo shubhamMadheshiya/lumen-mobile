@@ -10,6 +10,7 @@ import {
   StyleSheet, Alert, ActivityIndicator, Switch, Modal, Pressable,
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { safeGoBack } from '../../../src/utils/navigation';
 import { IOption, CaptureTime, FieldDefinition } from '@lumen/shared';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
@@ -98,7 +99,7 @@ export default function OptionEditor() {
         await api.patch(`/options/${id}`, body);
       }
       invalidate(); await fetchConfig();
-      router.back();
+      safeGoBack('/customize');
     } catch (err: unknown) {
       Alert.alert('Save failed', err instanceof Error ? err.message : 'Unknown error');
     } finally { setSaving(false); }
@@ -115,7 +116,7 @@ export default function OptionEditor() {
         onPress: async () => {
           try {
             await api.post(`/options/${id}/archive`, {});
-            invalidate(); await fetchConfig(); router.back();
+            invalidate(); await fetchConfig(); safeGoBack('/customize');
           } catch (err: any) {
             Alert.alert('Archive failed', err?.message || 'Unknown error');
           }
@@ -129,7 +130,7 @@ export default function OptionEditor() {
       await api.post(`/options/${id}/unarchive`, {});
       invalidate(); await fetchConfig();
       Alert.alert('Option Restored', `"${label}" is active again.`);
-      router.back();
+      safeGoBack('/customize');
     } catch (err: any) {
       Alert.alert('Restore failed', err?.message || 'Unknown error');
     }
@@ -149,7 +150,7 @@ export default function OptionEditor() {
               const res: any = await api.delete(`/options/${id}`);
               invalidate(); await fetchConfig();
               Alert.alert('Deleted', res.message || 'Option deleted permanently.');
-              router.back();
+              safeGoBack('/customize');
             } catch (err: any) {
               Alert.alert('Cannot Delete', err?.message || 'Error deleting option');
             }

@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigation';
 import { ChevronLeft, Check, Trash2, BellRing } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
@@ -116,7 +117,7 @@ export default function EditReminderScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeGoBack('/reminders')}>
             <ChevronLeft size={24} color={palette.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Reminder Not Found</Text>
@@ -124,7 +125,7 @@ export default function EditReminderScreen() {
         </View>
         <View style={styles.notFoundCenter}>
           <Text style={styles.notFoundText}>This reminder could not be found or was deleted.</Text>
-          <TouchableOpacity style={styles.notFoundBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.notFoundBtn} onPress={() => safeGoBack('/reminders')}>
             <Text style={styles.notFoundBtnText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -169,7 +170,7 @@ export default function EditReminderScreen() {
         enabled,
       });
 
-      router.back();
+      safeGoBack('/reminders');
     } catch {
       Alert.alert('Error', 'Failed to save changes. Please try again.');
     } finally {
@@ -189,7 +190,7 @@ export default function EditReminderScreen() {
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             await deleteReminder(reminder._id);
-            router.back();
+            safeGoBack('/reminders');
           },
         },
       ]
@@ -200,7 +201,7 @@ export default function EditReminderScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Top Bar */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => safeGoBack('/reminders')}>
           <ChevronLeft size={24} color={palette.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Reminder</Text>

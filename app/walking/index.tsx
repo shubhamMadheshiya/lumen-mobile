@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigation';
 import { ChevronLeft, Play, Footprints, Flame, Timer, TrendingUp } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
@@ -67,7 +68,7 @@ export default function WalkingDashboardScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => safeGoBack('/(tabs)/today')}>
           <ChevronLeft size={24} color={palette.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Walking Tracker</Text>

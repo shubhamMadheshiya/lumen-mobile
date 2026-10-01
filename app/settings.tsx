@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { safeGoBack } from '../src/utils/navigation';
 import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -380,7 +381,7 @@ export default function SettingsScreen() {
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => safeGoBack('/(tabs)/today')}
           {...buttonProps('Go back')}
         >
           <ChevronLeft size={24} color={palette.text} />

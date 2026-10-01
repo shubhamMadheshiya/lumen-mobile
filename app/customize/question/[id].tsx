@@ -9,6 +9,7 @@ import {
   StyleSheet, Alert, ActivityIndicator, Switch,
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { safeGoBack } from '../../../src/utils/navigation';
 import { IQuestion, QuestionFrequency, SelectionType } from '@lumen/shared';
 import { useConfigStore } from '../../../src/store/configStore';
 import { api } from '../../../src/api/client';
@@ -94,7 +95,7 @@ export default function QuestionEditor() {
           try {
             await api.post(`/questions/${id}/archive`, {});
             invalidate(); await fetchConfig();
-            router.back();
+            safeGoBack('/customize');
           } catch (err: any) {
             Alert.alert('Archive failed', err?.message || 'Unknown error');
           }
@@ -108,7 +109,7 @@ export default function QuestionEditor() {
       await api.post(`/questions/${id}/unarchive`, {});
       invalidate(); await fetchConfig();
       Alert.alert('Question Restored', `"${title}" is active again.`);
-      router.back();
+      safeGoBack('/customize');
     } catch (err: any) {
       Alert.alert('Restore failed', err?.message || 'Unknown error');
     }
@@ -128,7 +129,7 @@ export default function QuestionEditor() {
               const res: any = await api.delete(`/questions/${id}`);
               invalidate(); await fetchConfig();
               Alert.alert('Deleted', res.message || 'Question deleted permanently.');
-              router.back();
+              safeGoBack('/customize');
             } catch (err: any) {
               Alert.alert('Cannot Delete', err?.message || 'Error deleting question');
             }

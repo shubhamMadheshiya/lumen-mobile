@@ -4,6 +4,7 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigation';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useAuthStore } from '../../src/store/authStore';
@@ -37,7 +38,7 @@ export default function RegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={() => router.back()} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back">
+        <TouchableOpacity onPress={() => safeGoBack('/(auth)/login')} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back">
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 

@@ -9,6 +9,7 @@ import {
   ActivityIndicator, Alert, Platform, Modal, Pressable,
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigation';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { uuidv4 } from '../../src/utils/uuid';
 import { IQuestion, IOption, ICategory, Answer, ILogEntry } from '@lumen/shared';
@@ -134,7 +135,7 @@ export default function QuestionSheet() {
         answers: allAns,
         note: note.trim() || undefined,
       });
-      router.back();
+      safeGoBack('/(tabs)/today');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong';
       Alert.alert('Log failed', msg);

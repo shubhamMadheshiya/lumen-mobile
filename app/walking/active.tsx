@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigation';
 import { Pause, Play, Square, Footprints } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { typography } from '../../src/theme/typography';
@@ -74,7 +75,7 @@ export default function ActiveWalkingScreen() {
           style: 'destructive',
           onPress: async () => {
             await discardWalking();
-            router.back();
+            safeGoBack('/walking');
           },
         },
         {
@@ -85,7 +86,7 @@ export default function ActiveWalkingScreen() {
             if (completed) {
               router.replace('/walking/summary');
             } else {
-              router.back();
+              safeGoBack('/walking');
             }
           },
         },

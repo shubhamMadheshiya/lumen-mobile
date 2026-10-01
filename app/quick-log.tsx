@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
+import { safeGoBack } from '../src/utils/navigation';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { ChevronLeft, SlidersHorizontal, Clock, Check, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -125,7 +126,7 @@ export default function QuickLogScreen() {
         note: note.trim() || undefined,
       });
 
-      router.back();
+      safeGoBack('/(tabs)/today');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to save Quick Log';
       Alert.alert('Error', msg);
@@ -151,7 +152,7 @@ export default function QuickLogScreen() {
           headerLeft: () => (
             <TouchableOpacity
               style={styles.headerBtn}
-              onPress={() => router.back()}
+              onPress={() => safeGoBack('/(tabs)/today')}
               accessibilityRole="button"
               accessibilityLabel="Back"
             >

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { uuidv4 } from '../src/utils/uuid';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { safeGoBack } from '../src/utils/navigation';
 import { IQuestion, IOption, Answer, QuestionFrequency } from '@lumen/shared';
 import { useConfigStore } from '../src/store/configStore';
 import { useDaySessionStore } from '../src/store/daySessionStore';
@@ -68,10 +69,10 @@ export default function CheckInModal() {
     [],
   );
 
-  const handleSkip = () => router.back();
+  const handleSkip = () => safeGoBack('/(tabs)/today');
 
   const handleSubmit = async () => {
-    if (allAnswers.length === 0) { router.back(); return; }
+    if (allAnswers.length === 0) { safeGoBack('/(tabs)/today'); return; }
 
     setIsSubmitting(true);
     try {
@@ -84,7 +85,7 @@ export default function CheckInModal() {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         answers: uploadedAnswers,
       });
-      router.back();
+      safeGoBack('/(tabs)/today');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Check-in failed';
       Alert.alert('Error', msg);

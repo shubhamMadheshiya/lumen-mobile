@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigation';
 import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft, RotateCcw, BellRing, Edit2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
@@ -169,7 +170,7 @@ export default function RemindersScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => router.back()}
+          onPress={() => safeGoBack('/(tabs)/today')}
           accessibilityRole="button"
         >
           <ChevronLeft size={24} color={palette.text} />

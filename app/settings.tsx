@@ -452,16 +452,24 @@ export default function SettingsScreen() {
         </Text>
 
         <View style={styles.card}>
-          <View style={styles.vitalsRow}>
-            {/* Age input */}
-            <View style={styles.vitalInputCol}>
-              <View style={styles.vitalLabelRow}>
-                <Calendar size={13} color={palette.primary} />
-                <Text style={styles.vitalInputLabel}>Age</Text>
+          {/* Section 1: Body Metrics (Age & Weight) */}
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Heart size={18} color={palette.textSecondary} />
+              <View>
+                <Text style={styles.rowLabel}>Body Metrics</Text>
+                <Text style={styles.rowSub}>Age and weight for metabolic tracking</Text>
               </View>
-              <View style={styles.vitalInputWrap}>
+            </View>
+          </View>
+
+          <View style={styles.vitalsInputsRow}>
+            {/* Age field */}
+            <View style={styles.vitalField}>
+              <Text style={styles.vitalFieldLabel}>Age</Text>
+              <View style={styles.vitalFieldBox}>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={styles.vitalTextInput}
                   value={age}
                   onChangeText={setAge}
                   placeholder="e.g. 29"
@@ -473,46 +481,56 @@ export default function SettingsScreen() {
               </View>
             </View>
 
-            {/* Weight input */}
-            <View style={styles.vitalInputCol}>
-              <View style={styles.vitalLabelRow}>
-                <Scale size={13} color={palette.primary} />
-                <Text style={styles.vitalInputLabel}>Weight</Text>
-              </View>
-              <View style={styles.vitalInputWrap}>
+            {/* Weight field */}
+            <View style={styles.vitalField}>
+              <Text style={styles.vitalFieldLabel}>
+                Weight ({activeUnits === 'imperial' ? 'lbs' : 'kg'})
+              </Text>
+              <View style={styles.vitalFieldBox}>
                 <TextInput
-                  style={styles.vitalInput}
+                  style={styles.vitalTextInput}
                   value={weight}
                   onChangeText={setWeight}
-                  placeholder={user?.preferences?.units === 'imperial' ? 'e.g. 154' : 'e.g. 70'}
+                  placeholder={activeUnits === 'imperial' ? 'e.g. 154' : 'e.g. 70'}
                   placeholderTextColor={palette.placeholder}
                   keyboardType="decimal-pad"
                   maxLength={5}
                 />
                 <Text style={styles.vitalUnitSuffix}>
-                  {user?.preferences?.units === 'imperial' ? 'lbs' : 'kg'}
+                  {activeUnits === 'imperial' ? 'lbs' : 'kg'}
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* Gender Identity */}
-          <Text style={[styles.vitalInputLabel, { marginTop: 14, marginBottom: 8 }]}>Gender Identity</Text>
+          <View style={styles.divider} />
+
+          {/* Section 2: Gender Identity */}
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <UserIcon size={18} color={palette.textSecondary} />
+              <View>
+                <Text style={styles.rowLabel}>Gender Identity</Text>
+                <Text style={styles.rowSub}>For clinical and hormonal correlation</Text>
+              </View>
+            </View>
+          </View>
+
           <View style={styles.chipsContainer}>
             {GENDER_OPTIONS.map(opt => {
               const isSelected = gender === opt.key;
               return (
                 <TouchableOpacity
                   key={opt.key}
-                  style={[styles.genderChip, isSelected && styles.genderChipActive]}
+                  style={[styles.conditionChip, isSelected && styles.conditionChipActive]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setGender(prev => prev === opt.key ? '' : opt.key);
                   }}
                   {...buttonProps(`Gender: ${opt.label}`, false)}
                 >
-                  {isSelected && <Check size={12} color="#FFFFFF" style={{ marginRight: 4 }} />}
-                  <Text style={[styles.genderChipText, isSelected && styles.genderChipTextActive]}>
+                  {isSelected && <Check size={13} color="#FFFFFF" style={{ marginRight: 4 }} />}
+                  <Text style={[styles.conditionChipText, isSelected && styles.conditionChipTextActive]}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -520,24 +538,28 @@ export default function SettingsScreen() {
             })}
           </View>
 
-          {/* Save Vitals Button */}
-          <TouchableOpacity
-            style={[styles.saveVitalsBtn, vitalsSaved && styles.saveVitalsBtnSuccess]}
-            onPress={handleSaveVitals}
-            disabled={isSavingVitals}
-            {...buttonProps('Save personal vitals')}
-          >
-            {isSavingVitals ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : vitalsSaved ? (
-              <View style={styles.btnRow}>
-                <Check size={16} color="#FFFFFF" />
-                <Text style={styles.saveVitalsBtnText}>Vitals Saved</Text>
-              </View>
-            ) : (
-              <Text style={styles.saveVitalsBtnText}>Save Vitals</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.divider} />
+
+          {/* Save Button Row */}
+          <View style={styles.vitalsActionRow}>
+            <TouchableOpacity
+              style={[styles.saveVitalsButton, vitalsSaved && styles.saveVitalsButtonSuccess]}
+              onPress={handleSaveVitals}
+              disabled={isSavingVitals}
+              {...buttonProps('Save personal vitals')}
+            >
+              {isSavingVitals ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : vitalsSaved ? (
+                <View style={styles.btnRow}>
+                  <Check size={16} color="#FFFFFF" />
+                  <Text style={styles.saveVitalsButtonText}>Vitals Saved</Text>
+                </View>
+              ) : (
+                <Text style={styles.saveVitalsButtonText}>Save Vitals</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Health Conditions & Diagnoses */}
@@ -1347,84 +1369,63 @@ function makeStyles(palette: ThemeTokens) {
       fontWeight: '700',
     },
     // Vitals section
-    vitalsRow: {
+    vitalsInputsRow: {
       flexDirection: 'row',
       gap: 12,
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 16,
     },
-    vitalInputCol: {
+    vitalField: {
       flex: 1,
-    },
-    vitalLabelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
       gap: 6,
-      marginBottom: 6,
     },
-    vitalInputLabel: {
+    vitalFieldLabel: {
       ...typography.caption,
-      color: palette.text,
-      fontWeight: '700',
+      color: palette.textSecondary,
+      fontWeight: '600',
       fontSize: 12,
     },
-    vitalInputWrap: {
+    vitalFieldBox: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: palette.surfaceAlt,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: palette.border,
       borderRadius: 12,
-      paddingHorizontal: 12,
+      paddingHorizontal: 14,
+      height: 48,
     },
-    vitalInput: {
+    vitalTextInput: {
       flex: 1,
-      paddingVertical: 10,
+      height: 48,
       color: palette.text,
       ...typography.body,
       fontWeight: '600',
       fontSize: 15,
+      paddingVertical: 0,
     },
     vitalUnitSuffix: {
       ...typography.caption,
-      color: palette.textSecondary,
-      fontWeight: '600',
-      marginLeft: 4,
-    },
-    genderChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 20,
-      backgroundColor: palette.surfaceAlt,
-      borderWidth: 1,
-      borderColor: palette.border,
-    },
-    genderChipActive: {
-      backgroundColor: palette.primary,
-      borderColor: palette.primary,
-    },
-    genderChipText: {
-      ...typography.caption,
-      color: palette.text,
-      fontWeight: '600',
-      fontSize: 12,
-    },
-    genderChipTextActive: {
-      color: '#FFFFFF',
+      color: palette.textDisabled,
       fontWeight: '700',
+      fontSize: 12,
+      marginLeft: 6,
     },
-    saveVitalsBtn: {
-      marginTop: 16,
+    vitalsActionRow: {
+      padding: 16,
+    },
+    saveVitalsButton: {
       backgroundColor: palette.primary,
-      paddingVertical: 12,
+      paddingVertical: 13,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    saveVitalsBtnSuccess: {
+    saveVitalsButtonSuccess: {
       backgroundColor: '#10B981',
     },
-    saveVitalsBtnText: {
+    saveVitalsButtonText: {
       ...typography.body,
       color: '#FFFFFF',
       fontWeight: '700',

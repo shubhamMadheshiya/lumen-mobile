@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { Sun, Sunrise, Moon } from 'lucide-react-native';
 import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { useDaySessionStore } from '../store/daySessionStore';
@@ -61,7 +62,9 @@ export function DayClockCard(): React.ReactElement {
     // Day closed — show summary
     return (
       <View style={[styles.card, styles.closedCard]}>
-        <Text style={styles.closedEmoji}>🌙</Text>
+        <View style={styles.iconBadgeMoon}>
+          <Moon size={26} color="#6366F1" strokeWidth={2} />
+        </View>
         <Text style={styles.closedTitle}>Day complete</Text>
         <Text style={styles.closedSubtitle}>
           Awake {formatTime(todaySession?.wakeTime)} → {formatTime(todaySession?.sleepTime)}
@@ -81,7 +84,9 @@ export function DayClockCard(): React.ReactElement {
         activeOpacity={0.85}
       >
         <View style={styles.row}>
-          <Text style={styles.emoji}>🌅</Text>
+          <View style={styles.iconBadgeSunrise}>
+            <Sunrise size={24} color="#EA580C" strokeWidth={2.2} />
+          </View>
           <View style={styles.textGroup}>
             <Text style={styles.title}>You're awake</Text>
             <Text style={styles.subtitle}>
@@ -91,7 +96,8 @@ export function DayClockCard(): React.ReactElement {
           </View>
         </View>
         <View style={styles.sleepButton}>
-          <Text style={styles.sleepButtonText}>🌙  Go to bed</Text>
+          <Moon size={16} color={palette.text} style={{ marginRight: 6 }} />
+          <Text style={styles.sleepButtonText}>Go to bed</Text>
         </View>
       </TouchableOpacity>
     );
@@ -108,7 +114,9 @@ export function DayClockCard(): React.ReactElement {
       activeOpacity={0.85}
     >
       <View style={styles.row}>
-        <Text style={styles.emoji}>☀️</Text>
+        <View style={styles.iconBadgeSun}>
+          <Sun size={26} color="#F59E0B" strokeWidth={2.2} />
+        </View>
         <View style={styles.textGroup}>
           <Text style={styles.title}>Good morning!</Text>
           <Text style={styles.subtitle}>Tap when you're awake</Text>
@@ -148,9 +156,32 @@ const useStyles = createThemedStyles(palette => ({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 36,
+  iconBadgeSun: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#F59E0B1A',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 14,
+  },
+  iconBadgeSunrise: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#EA580C1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  iconBadgeMoon: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: '#6366F11A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   textGroup: {
     flex: 1,
@@ -171,15 +202,13 @@ const useStyles = createThemedStyles(palette => ({
     borderColor: palette.border,
     borderRadius: 12,
     paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   sleepButtonText: {
     ...typography.button,
     color: palette.text,
-  },
-  closedEmoji: {
-    fontSize: 40,
-    marginBottom: 8,
   },
   closedTitle: {
     ...typography.h4,

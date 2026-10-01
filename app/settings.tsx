@@ -1,58 +1,309 @@
 /**
- * Settings screen — profile, theme, units, app lock, data export, delete account.
+ * User Profile & Settings Screen
+ * ─ User Profile Hero Card (Avatar, Name, Email, Account Type, Edit Name Modal)
+ * ─ Health Conditions & Diagnoses Manager (Quick tags + Custom condition builder)
+ * ─ App Preferences & Units (Metric/Imperial, °C/°F, Day Boundary Hour, Theme)
+ * ─ Security (Biometric App Lock with expo-local-authentication)
+ * ─ Health Data & Configuration Management (Export Reports, Export/Import Setup)
+ * ─ Multi-layered Logout Flow (API logout, Token wipe, Cross-store reset, Login redirect)
+ * ─ Danger Zone (Permanent account & health record deletion)
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Switch,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import * as LocalAuthentication from 'expo-local-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  ChevronLeft,
+  ChevronRight,
+  User as UserIcon,
+  Mail,
+  Shield,
+  Moon,
+  Sun,
+  Globe,
+  Thermometer,
+  Clock,
+  LogOut,
+  Trash2,
+  Check,
+  Edit2,
+  Plus,
+  X,
+  Sparkles,
+  Lock,
+  Heart,
+  Ruler,
+} from 'lucide-react-native';
+
 import { useTheme } from '../src/theme/ThemeContext';
 import { useAuthStore } from '../src/store/authStore';
 import { api } from '../src/api/client';
 import { buttonProps } from '../src/utils/accessibility';
 import { typography } from '../src/theme/typography';
+import { ThemeTokens } from '../src/theme/tokens';
 
 type ThemePref = 'system' | 'light' | 'dark';
 
 const THEME_OPTIONS: { key: ThemePref; label: string; icon: string }[] = [
   { key: 'system', label: 'System', icon: '🌐' },
-  { key: 'light',  label: 'Light',  icon: '☀️' },
-  { key: 'dark',   label: 'Dark',   icon: '🌙' },
+  { key: 'light', label: 'Light', icon: '☀️' },
+  { key: 'dark', label: 'Dark', icon: '🌙' },
 ];
 
-const TEMP_OPTIONS = [
+const UNIT_OPTIONS: { key: 'metric' | 'imperial'; label: string; desc: string }[] = [
+  { key: 'metric', label: 'Metric', desc: 'km, kg, ml' },
+  { key: 'imperial', label: 'Imperial', desc: 'mi, lb, oz' },
+];
+
+const TEMP_OPTIONS: { key: 'C' | 'F'; label: string }[] = [
   { key: 'C', label: '°C (Celsius)' },
   { key: 'F', label: '°F (Fahrenheit)' },
 ];
 
+const DAY_BOUNDARY_OPTIONS: { hour: number; label: string }[] = [
+  { hour: 0, label: '12 AM' },
+  { hour: 2, label: '2 AM' },
+  { hour: 4, label: '4 AM' },
+  { hour: 6, label: '6 AM' },
+];
+
+const COMMON_CONDITIONS = [
+  'Lupus (SLE)',
+  'Rheumatoid Arthritis',
+  'Crohn’s Disease',
+  'Ulcerative Colitis',
+  'Psoriasis',
+  'Fibromyalgia',
+  'Long COVID',
+  'Chronic Fatigue (ME/CFS)',
+  'Migraine',
+  'Asthma',
+  'POTS',
+  'Endometriosis',
+  'Eczema',
+  'IBS',
+];
+
+const APP_LOCK_KEY = 'lumen:security:app_lock';
+
 export default function SettingsScreen() {
   const { palette, preference, setPreference } = useTheme();
-  const { user, logout } = useAuthStore();
-  const [tempUnit, setTempUnit] = useState<'C' | 'F'>('C');
-  const [appLock, setAppLock] = useState(false);
+  const { user, updateProfile, logout, fetchProfile, isLoading } = useAuthStore();
 
   const styles = makeStyles(palette);
 
-  const handleLogout = () => {
-    Alert.alert('Log out', 'You will need to sign in again.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: logout },
-    ]);
+  // Profile Edit Modal state
+  const [editNameVisible, setEditNameVisible] = useState(false);
+  const [newName, setNewName] = useState(user?.name || '');
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  // Condition Manager state
+  const [addConditionVisible, setAddConditionVisible] = useState(false);
+  const [customCondition, setCustomCondition] = useState('');
+  const [isUpdatingConditions, setIsUpdatingConditions] = useState(false);
+
+  // Security state
+  const [appLock, setAppLock] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    fetchProfile().catch(() => {});
+    AsyncStorage.getItem(APP_LOCK_KEY)
+      .then(val => setAppLock(val === 'true'))
+      .catch(() => {});
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    if (user?.name) {
+      setNewName(user.name);
+    }
+  }, [user?.name]);
+
+  // Initials generator
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'U';
+
+  const memberSince = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, {
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
+
+  // Save Name Handler
+  const handleSaveName = async () => {
+    if (!newName.trim()) {
+      Alert.alert('Validation Error', 'Please enter your name.');
+      return;
+    }
+    setIsSavingName(true);
+    try {
+      await updateProfile({ name: newName.trim() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEditNameVisible(false);
+    } catch {
+      Alert.alert('Error', 'Failed to update name. Please try again.');
+    } finally {
+      setIsSavingName(false);
+    }
   };
 
-  const handleDeleteAccount = () => {
+  // Toggle Condition Handler
+  const handleToggleCondition = async (condition: string) => {
+    Haptics.selectionAsync();
+    const current = user?.conditions || [];
+    const exists = current.includes(condition);
+    const updated = exists ? current.filter(c => c !== condition) : [...current, condition];
+
+    setIsUpdatingConditions(true);
+    try {
+      await updateProfile({ conditions: updated });
+    } catch {
+      Alert.alert('Error', 'Failed to update conditions.');
+    } finally {
+      setIsUpdatingConditions(false);
+    }
+  };
+
+  // Add Custom Condition Handler
+  const handleAddCustomCondition = async () => {
+    const trimmed = customCondition.trim();
+    if (!trimmed) return;
+    const current = user?.conditions || [];
+    if (current.includes(trimmed)) {
+      setCustomCondition('');
+      setAddConditionVisible(false);
+      return;
+    }
+    const updated = [...current, trimmed];
+    setIsUpdatingConditions(true);
+    try {
+      await updateProfile({ conditions: updated });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCustomCondition('');
+      setAddConditionVisible(false);
+    } catch {
+      Alert.alert('Error', 'Failed to add condition.');
+    } finally {
+      setIsUpdatingConditions(false);
+    }
+  };
+
+  // Preference Handlers
+  const handleUnitsChange = async (units: 'metric' | 'imperial') => {
+    Haptics.selectionAsync();
+    try {
+      await updateProfile({ preferences: { units } });
+    } catch {}
+  };
+
+  const handleTempUnitChange = async (tempUnit: 'C' | 'F') => {
+    Haptics.selectionAsync();
+    try {
+      await updateProfile({ preferences: { tempUnit } });
+    } catch {}
+  };
+
+  const handleDayBoundaryChange = async (dayBoundaryHour: number) => {
+    Haptics.selectionAsync();
+    try {
+      await updateProfile({ preferences: { dayBoundaryHour } });
+    } catch {}
+  };
+
+  const handleThemeChange = async (pref: ThemePref) => {
+    Haptics.selectionAsync();
+    setPreference(pref);
+    try {
+      await updateProfile({ preferences: { theme: pref } });
+    } catch {}
+  };
+
+  // App Lock Switch Handler
+  const handleToggleAppLock = async (value: boolean) => {
+    if (value) {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (hasHardware && isEnrolled) {
+        const result = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Verify identity to enable App Lock',
+          fallbackLabel: 'Use Passcode',
+        });
+        if (!result.success) return;
+      }
+    }
+    setAppLock(value);
+    await AsyncStorage.setItem(APP_LOCK_KEY, value ? 'true' : 'false');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  // Logout Handler
+  const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
-      'Delete account?',
-      'This permanently deletes ALL your data — logs, config and account. This cannot be undone.',
+      'Log Out of Lumen',
+      'Are you sure you want to log out? Your local session and active logs will be safely synchronized.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete everything',
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoggingOut(true);
+            try {
+              await logout();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.replace('/(auth)/login');
+            } catch {
+              router.replace('/(auth)/login');
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Delete Account Handler
+  const handleDeleteAccount = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      'Delete Account & All Data?',
+      'This will permanently delete your entire health history, day sessions, custom trackers, and user account. This action CANNOT be reversed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete('/me');
-              logout();
+              await api.delete('/auth/me');
+              await logout();
+              router.replace('/(auth)/login');
             } catch {
               Alert.alert('Error', 'Could not delete your account. Please try again.');
             }
@@ -62,141 +313,879 @@ export default function SettingsScreen() {
     );
   };
 
+  const activeUnits = user?.preferences?.units || 'metric';
+  const activeTempUnit = user?.preferences?.tempUnit || 'C';
+  const activeBoundary = user?.preferences?.dayBoundaryHour ?? 4;
+  const userConditions = user?.conditions || [];
+
   return (
-    <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Settings', headerBackTitle: 'Back' }} />
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      {/* Header Bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          {...buttonProps('Go back')}
+        >
+          <ChevronLeft size={24} color={palette.text} />
+        </TouchableOpacity>
+        <Text style={styles.topBarTitle}>Profile & Settings</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Profile */}
-        <Text style={styles.section}>Account</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Email</Text>
-            <Text style={styles.rowValue}>{user?.email ?? '—'}</Text>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* User Hero Profile Card */}
+        <View style={styles.profileHeroCard}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            </View>
+            <View style={styles.avatarBadge}>
+              <Sparkles size={13} color="#FFFFFF" />
+            </View>
           </View>
-          <View style={[styles.row, styles.rowLast]}>
-            <Text style={styles.rowLabel}>Name</Text>
-            <Text style={styles.rowValue}>{user?.name ?? '—'}</Text>
+
+          <View style={styles.heroDetails}>
+            <View style={styles.heroNameRow}>
+              <Text style={styles.heroName} numberOfLines={1}>
+                {user?.name || 'Lumen Member'}
+              </Text>
+              <TouchableOpacity
+                style={styles.editNameBtn}
+                onPress={() => setEditNameVisible(true)}
+                {...buttonProps('Edit name')}
+              >
+                <Edit2 size={16} color={palette.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.heroEmailRow}>
+              <Mail size={14} color={palette.textSecondary} />
+              <Text style={styles.heroEmail} numberOfLines={1}>
+                {user?.email || '—'}
+              </Text>
+            </View>
+
+            <View style={styles.badgeRow}>
+              <View style={styles.accountBadge}>
+                <Lock size={11} color={palette.primary} />
+                <Text style={styles.accountBadgeText}>Personal Health Record</Text>
+              </View>
+              {memberSince ? (
+                <Text style={styles.memberSinceText}>Joined {memberSince}</Text>
+              ) : null}
+            </View>
           </View>
         </View>
 
-        {/* Appearance */}
-        <Text style={styles.section}>Appearance</Text>
+        {/* Health Conditions & Diagnoses */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Conditions & Health Focus</Text>
+          {isUpdatingConditions && <ActivityIndicator size="small" color={palette.primary} />}
+        </View>
+        <Text style={styles.sectionDescription}>
+          Select the chronic conditions or symptoms you are tracking. Lumen tailors questionnaires, trigger correlations, and reminder triggers around these.
+        </Text>
+
         <View style={styles.card}>
-          <Text style={styles.groupLabel}>Theme</Text>
+          <View style={styles.chipsContainer}>
+            {/* Common Condition Chips */}
+            {COMMON_CONDITIONS.map(cond => {
+              const isSelected = userConditions.includes(cond);
+              return (
+                <TouchableOpacity
+                  key={cond}
+                  style={[styles.conditionChip, isSelected && styles.conditionChipActive]}
+                  onPress={() => handleToggleCondition(cond)}
+                  {...buttonProps(`Condition: ${cond}`, false)}
+                >
+                  {isSelected && <Check size={13} color="#FFFFFF" style={{ marginRight: 4 }} />}
+                  <Text
+                    style={[
+                      styles.conditionChipText,
+                      isSelected && styles.conditionChipTextActive,
+                    ]}
+                  >
+                    {cond}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Custom user conditions not in COMMON_CONDITIONS */}
+            {userConditions
+              .filter(c => !COMMON_CONDITIONS.includes(c))
+              .map(cond => (
+                <TouchableOpacity
+                  key={cond}
+                  style={[styles.conditionChip, styles.conditionChipActive]}
+                  onPress={() => handleToggleCondition(cond)}
+                  {...buttonProps(`Condition: ${cond}`, false)}
+                >
+                  <Check size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={[styles.conditionChipText, styles.conditionChipTextActive]}>
+                    {cond}
+                  </Text>
+                  <X size={12} color="#FFFFFF" style={{ marginLeft: 5 }} />
+                </TouchableOpacity>
+              ))}
+
+            {/* Add Custom Condition Button */}
+            <TouchableOpacity
+              style={styles.addConditionChip}
+              onPress={() => setAddConditionVisible(true)}
+              {...buttonProps('Add custom condition')}
+            >
+              <Plus size={14} color={palette.primary} />
+              <Text style={styles.addConditionText}>Add Condition</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Units & Measurements */}
+        <Text style={styles.sectionTitle}>Measurement & Scale Units</Text>
+        <View style={styles.card}>
+          {/* Units System */}
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Ruler size={18} color={palette.textSecondary} />
+              <View>
+                <Text style={styles.rowLabel}>Measurement System</Text>
+                <Text style={styles.rowSub}>For distance, volume & metrics</Text>
+              </View>
+            </View>
+          </View>
           <View style={styles.segRow}>
-            {THEME_OPTIONS.map(opt => (
+            {UNIT_OPTIONS.map(opt => (
               <TouchableOpacity
                 key={opt.key}
-                style={[styles.seg, preference === opt.key && { backgroundColor: palette.primary, borderColor: palette.primary }]}
-                onPress={() => setPreference(opt.key)}
-                {...buttonProps(`${opt.label} theme`, false)}
+                style={[
+                  styles.seg,
+                  activeUnits === opt.key && styles.segActive,
+                ]}
+                onPress={() => handleUnitsChange(opt.key)}
+                {...buttonProps(`${opt.label} units`, false)}
               >
-                <Text style={styles.segIcon}>{opt.icon}</Text>
-                <Text style={[styles.segLabel, preference === opt.key && { color: palette.white }]}>{opt.label}</Text>
+                <Text
+                  style={[
+                    styles.segLabel,
+                    activeUnits === opt.key && styles.segLabelActive,
+                  ]}
+                >
+                  {opt.label} ({opt.desc})
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Temperature */}
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Thermometer size={18} color={palette.textSecondary} />
+              <View>
+                <Text style={styles.rowLabel}>Temperature Scale</Text>
+                <Text style={styles.rowSub}>For fever and ambient logging</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.segRow}>
+            {TEMP_OPTIONS.map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[
+                  styles.seg,
+                  activeTempUnit === opt.key && styles.segActive,
+                ]}
+                onPress={() => handleTempUnitChange(opt.key)}
+                {...buttonProps(opt.label, false)}
+              >
+                <Text
+                  style={[
+                    styles.segLabel,
+                    activeTempUnit === opt.key && styles.segLabelActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Day Boundary Hour */}
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Clock size={18} color={palette.textSecondary} />
+              <View>
+                <Text style={styles.rowLabel}>Day Reset Boundary</Text>
+                <Text style={styles.rowSub}>When a new tracking day starts</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.segRow}>
+            {DAY_BOUNDARY_OPTIONS.map(opt => (
+              <TouchableOpacity
+                key={opt.hour}
+                style={[
+                  styles.segSmall,
+                  activeBoundary === opt.hour && styles.segActive,
+                ]}
+                onPress={() => handleDayBoundaryChange(opt.hour)}
+                {...buttonProps(`Day boundary: ${opt.label}`, false)}
+              >
+                <Text
+                  style={[
+                    styles.segLabel,
+                    activeBoundary === opt.hour && styles.segLabelActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Units */}
-        <Text style={styles.section}>Units</Text>
+        {/* Appearance */}
+        <Text style={styles.sectionTitle}>Appearance</Text>
         <View style={styles.card}>
-          <Text style={styles.groupLabel}>Temperature</Text>
-          <View style={styles.segRow}>
-            {TEMP_OPTIONS.map(opt => (
+          <View style={styles.segRowTop}>
+            {THEME_OPTIONS.map(opt => (
               <TouchableOpacity
                 key={opt.key}
-                style={[styles.seg, tempUnit === opt.key && { backgroundColor: palette.primary, borderColor: palette.primary }]}
-                onPress={() => setTempUnit(opt.key as 'C' | 'F')}
-                {...buttonProps(opt.label, false)}
+                style={[
+                  styles.seg,
+                  preference === opt.key && styles.segActive,
+                ]}
+                onPress={() => handleThemeChange(opt.key)}
+                {...buttonProps(`${opt.label} theme`, false)}
               >
-                <Text style={[styles.segLabel, tempUnit === opt.key && { color: palette.white }]}>{opt.label}</Text>
+                <Text style={styles.segIcon}>{opt.icon}</Text>
+                <Text
+                  style={[
+                    styles.segLabel,
+                    preference === opt.key && styles.segLabelActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
         {/* Security */}
-        <Text style={styles.section}>Security</Text>
+        <Text style={styles.sectionTitle}>Security & Privacy</Text>
         <View style={styles.card}>
           <View style={[styles.row, styles.rowLast]}>
-            <View>
-              <Text style={styles.rowLabel}>App lock</Text>
-              <Text style={styles.rowSub}>Require Face ID / fingerprint on open</Text>
+            <View style={styles.rowLeft}>
+              <Shield size={18} color={palette.textSecondary} />
+              <View>
+                <Text style={styles.rowLabel}>Biometric App Lock</Text>
+                <Text style={styles.rowSub}>Require Face ID or passcode upon launch</Text>
+              </View>
             </View>
             <Switch
               value={appLock}
-              onValueChange={setAppLock}
+              onValueChange={handleToggleAppLock}
               trackColor={{ false: palette.border, true: palette.primary + '88' }}
               thumbColor={appLock ? palette.primary : palette.textDisabled}
-              accessibilityLabel="App lock"
+              accessibilityLabel="Biometric App Lock"
             />
           </View>
         </View>
 
-        {/* Data */}
-        <Text style={styles.section}>Data</Text>
+        {/* Health Data & Backups */}
+        <Text style={styles.sectionTitle}>Health Data & Backups</Text>
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.row}
             onPress={() => router.push('/reports')}
-            {...buttonProps('Export health data')}
+            {...buttonProps('Export clinical health report')}
           >
-            <Text style={styles.rowLabel}>Export health data</Text>
-            <Text style={styles.chevron}>›</Text>
+            <View style={styles.rowLeft}>
+              <Heart size={18} color={palette.primary} />
+              <View>
+                <Text style={styles.rowLabel}>Export Health Summary</Text>
+                <Text style={styles.rowSub}>Generate PDF or CSV reports for doctors</Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color={palette.textDisabled} />
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={styles.row}
+            style={[styles.row, styles.rowLast]}
             onPress={() => router.push('/customize/export')}
-            {...buttonProps('Export / import config')}
+            {...buttonProps('Export or import configuration')}
           >
-            <Text style={styles.rowLabel}>Export / import config</Text>
-            <Text style={styles.chevron}>›</Text>
+            <View style={styles.rowLeft}>
+              <Globe size={18} color={palette.secondary} />
+              <View>
+                <Text style={styles.rowLabel}>Configuration Backup</Text>
+                <Text style={styles.rowSub}>Export or import custom trackers & questions</Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color={palette.textDisabled} />
           </TouchableOpacity>
+        </View>
+
+        {/* Session & Sign Out */}
+        <Text style={styles.sectionTitle}>Account Session</Text>
+        <View style={styles.card}>
           <TouchableOpacity
             style={[styles.row, styles.rowLast]}
             onPress={handleLogout}
-            {...buttonProps('Log out')}
+            disabled={isLoggingOut}
+            {...buttonProps('Log out of Lumen')}
           >
-            <Text style={[styles.rowLabel, { color: palette.warning }]}>Log out</Text>
+            <View style={styles.rowLeft}>
+              <LogOut size={18} color={palette.warning} />
+              <View>
+                <Text style={[styles.rowLabel, { color: palette.warning }]}>
+                  Log Out
+                </Text>
+                <Text style={styles.rowSub}>Safely close session and clear local cache</Text>
+              </View>
+            </View>
+            {isLoggingOut ? (
+              <ActivityIndicator size="small" color={palette.warning} />
+            ) : (
+              <ChevronRight size={18} color={palette.warning} />
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Danger zone */}
+        {/* Danger Zone */}
         <View style={[styles.card, styles.dangerCard]}>
-          <TouchableOpacity onPress={handleDeleteAccount} {...buttonProps('Delete account and all data')}>
-            <Text style={styles.dangerText}>Delete account and all data</Text>
-            <Text style={styles.dangerSub}>Permanent. Cannot be undone.</Text>
+          <TouchableOpacity
+            onPress={handleDeleteAccount}
+            {...buttonProps('Delete account and all data')}
+          >
+            <View style={styles.dangerRow}>
+              <Trash2 size={18} color={palette.error} />
+              <Text style={styles.dangerText}>Delete Account & All Data</Text>
+            </View>
+            <Text style={styles.dangerSub}>
+              Permanently delete all logged symptoms, walking routes, medications, and your account. This action cannot be reversed.
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 48 }} />
       </ScrollView>
-    </View>
+
+      {/* Edit Name Modal */}
+      <Modal
+        visible={editNameVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditNameVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Profile Name</Text>
+            <Text style={styles.modalDesc}>How should Lumen address you in your daily check-ins?</Text>
+
+            <TextInput
+              style={styles.modalInput}
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Your full name"
+              placeholderTextColor={palette.placeholder}
+              autoFocus
+              maxLength={80}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setEditNameVisible(false)}
+                disabled={isSavingName}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSaveName}
+                disabled={isSavingName}
+              >
+                {isSavingName ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Name</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Add Custom Condition Modal */}
+      <Modal
+        visible={addConditionVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAddConditionVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Health Condition</Text>
+            <Text style={styles.modalDesc}>
+              Enter any medical condition, syndrome, or chronic symptom you want to track.
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              value={customCondition}
+              onChangeText={setCustomCondition}
+              placeholder="e.g. Hashimoto's, Sjögren's, Raynaud's"
+              placeholderTextColor={palette.placeholder}
+              autoFocus
+              maxLength={60}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setCustomCondition('');
+                  setAddConditionVisible(false);
+                }}
+                disabled={isUpdatingConditions}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleAddCustomCondition}
+                disabled={isUpdatingConditions || !customCondition.trim()}
+              >
+                {isUpdatingConditions ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Add Condition</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
-function makeStyles(palette: ReturnType<typeof import('../src/theme/ThemeContext').useTheme>['palette']) {
+function makeStyles(palette: ThemeTokens) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: palette.background },
-    scroll: { padding: 20, gap: 6 },
-    section: { ...typography.label, color: palette.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 18, marginBottom: 6 },
-    card: { backgroundColor: palette.surface, borderRadius: 16, borderWidth: 1, borderColor: palette.border, overflow: 'hidden' },
-    row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: palette.border },
-    rowLast: { borderBottomWidth: 0 },
-    rowLabel: { ...typography.body, color: palette.text },
-    rowValue: { ...typography.body, color: palette.textSecondary },
-    rowSub: { ...typography.small, color: palette.textDisabled, marginTop: 2 },
-    chevron: { ...typography.h4, color: palette.textDisabled },
-    groupLabel: { ...typography.label, color: palette.textSecondary, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 },
-    segRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 14 },
-    seg: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: palette.border, backgroundColor: palette.surfaceAlt },
-    segIcon: { fontSize: 14 },
-    segLabel: { ...typography.small, color: palette.textSecondary, fontWeight: '600' },
-    dangerCard: { borderColor: palette.error + '44', backgroundColor: palette.error + '08', marginTop: 12, padding: 16 },
-    dangerText: { ...typography.bodyBold, color: palette.error },
-    dangerSub: { ...typography.small, color: palette.error + 'AA', marginTop: 3 },
+    screen: {
+      flex: 1,
+      backgroundColor: palette.background,
+    },
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: palette.border,
+      backgroundColor: palette.surface,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 20,
+      backgroundColor: palette.surfaceAlt,
+    },
+    topBarTitle: {
+      ...typography.h3,
+      fontSize: 18,
+      color: palette.text,
+      fontWeight: '700',
+    },
+    scroll: {
+      padding: 18,
+      gap: 8,
+    },
+    // Hero Card
+    profileHeroCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: palette.surface,
+      borderRadius: 20,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: palette.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 3,
+      marginBottom: 10,
+    },
+    avatarContainer: {
+      position: 'relative',
+      marginRight: 16,
+    },
+    avatarCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: palette.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: palette.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    avatarInitials: {
+      ...typography.h2,
+      color: '#FFFFFF',
+      fontWeight: '800',
+      letterSpacing: 1,
+    },
+    avatarBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: palette.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: palette.surface,
+    },
+    heroDetails: {
+      flex: 1,
+      gap: 4,
+    },
+    heroNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    heroName: {
+      ...typography.h3,
+      fontSize: 19,
+      fontWeight: '700',
+      color: palette.text,
+      flex: 1,
+    },
+    editNameBtn: {
+      padding: 4,
+      borderRadius: 8,
+      backgroundColor: palette.primary + '18',
+    },
+    heroEmailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    heroEmail: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      flex: 1,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 4,
+    },
+    accountBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: palette.primary + '14',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 9999,
+    },
+    accountBadgeText: {
+      ...typography.caption,
+      fontSize: 11,
+      color: palette.primary,
+      fontWeight: '600',
+    },
+    memberSinceText: {
+      ...typography.caption,
+      fontSize: 11,
+      color: palette.textDisabled,
+    },
+    // Sections
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 14,
+      marginBottom: 2,
+    },
+    sectionTitle: {
+      ...typography.label,
+      color: palette.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      fontWeight: '700',
+      marginTop: 14,
+      marginBottom: 2,
+    },
+    sectionDescription: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      marginBottom: 6,
+      lineHeight: 18,
+    },
+    card: {
+      backgroundColor: palette.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: palette.border,
+      overflow: 'hidden',
+    },
+    divider: {
+      height: 1,
+      backgroundColor: palette.border,
+      marginHorizontal: 16,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: palette.border,
+    },
+    rowLast: {
+      borderBottomWidth: 0,
+    },
+    rowLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+    },
+    rowLabel: {
+      ...typography.body,
+      color: palette.text,
+      fontWeight: '600',
+    },
+    rowSub: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      marginTop: 2,
+    },
+    // Condition Chips
+    chipsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      padding: 14,
+    },
+    conditionChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 9999,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceAlt,
+    },
+    conditionChipActive: {
+      backgroundColor: palette.primary,
+      borderColor: palette.primary,
+    },
+    conditionChipText: {
+      ...typography.caption,
+      color: palette.text,
+      fontWeight: '600',
+    },
+    conditionChipTextActive: {
+      color: '#FFFFFF',
+    },
+    addConditionChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 9999,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: palette.primary,
+      backgroundColor: palette.primary + '10',
+    },
+    addConditionText: {
+      ...typography.caption,
+      color: palette.primary,
+      fontWeight: '700',
+    },
+    // Segment Controls
+    segRow: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingBottom: 14,
+    },
+    segRowTop: {
+      flexDirection: 'row',
+      gap: 8,
+      padding: 14,
+    },
+    seg: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceAlt,
+    },
+    segSmall: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 9,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: palette.border,
+      backgroundColor: palette.surfaceAlt,
+    },
+    segActive: {
+      backgroundColor: palette.primary,
+      borderColor: palette.primary,
+    },
+    segIcon: {
+      fontSize: 14,
+    },
+    segLabel: {
+      ...typography.small,
+      color: palette.textSecondary,
+      fontWeight: '600',
+    },
+    segLabelActive: {
+      color: '#FFFFFF',
+    },
+    // Danger Zone
+    dangerCard: {
+      borderColor: palette.error + '44',
+      backgroundColor: palette.error + '08',
+      marginTop: 14,
+      padding: 16,
+    },
+    dangerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 6,
+    },
+    dangerText: {
+      ...typography.bodyBold,
+      color: palette.error,
+    },
+    dangerSub: {
+      ...typography.caption,
+      color: palette.error + 'BB',
+      lineHeight: 18,
+    },
+    // Modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.65)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: palette.surface,
+      borderRadius: 20,
+      padding: 22,
+      borderWidth: 1,
+      borderColor: palette.border,
+      gap: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 16,
+      elevation: 6,
+    },
+    modalTitle: {
+      ...typography.h3,
+      color: palette.text,
+      fontWeight: '700',
+    },
+    modalDesc: {
+      ...typography.caption,
+      color: palette.textSecondary,
+      lineHeight: 18,
+    },
+    modalInput: {
+      backgroundColor: palette.surfaceAlt,
+      borderWidth: 1,
+      borderColor: palette.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: palette.text,
+      ...typography.body,
+      marginTop: 6,
+    },
+    modalActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: 10,
+      marginTop: 8,
+    },
+    modalCancelBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: palette.surfaceAlt,
+    },
+    modalCancelText: {
+      ...typography.body,
+      color: palette.textSecondary,
+      fontWeight: '600',
+    },
+    modalSaveBtn: {
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: palette.primary,
+      minWidth: 100,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalSaveText: {
+      ...typography.body,
+      color: '#FFFFFF',
+      fontWeight: '700',
+    },
   });
 }

@@ -5,11 +5,15 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// On web (browser on same machine), always use localhost.
-// On native (phone/emulator), use the configured LAN IP from .env.
-const BASE_URL = Platform.OS === 'web'
-  ? 'http://localhost:3000/api/v1'
-  : (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1');
+import Constants from 'expo-constants';
+
+const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, string>;
+
+// Use EXPO_PUBLIC_API_URL if configured, falling back to app.config.js extra or localhost
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ||
+  extra.apiUrl ||
+  'http://localhost:3000/api/v1';
 
 const KEYS = {
   accessToken:  'lumen_access_token',
@@ -91,8 +95,12 @@ export async function apiRequest<T = unknown>(
 
   const resp = await fetch(`${BASE_URL}${path}`, { ...options, headers });
 
-  const isAuthEndpoint = path.startsWith('/auth/');
-  if (resp.status === 401 && retry && !isAuthEndpoint) {
+  const isPublicAuthEndpoint =
+    path === '/auth/login' ||
+    path === '/auth/register' ||
+    path === '/auth/refresh' ||
+    path === '/auth/google';
+  if (resp.status === 401 && retry && !isPublicAuthEndpoint) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       return apiRequest<T>(path, options, false);

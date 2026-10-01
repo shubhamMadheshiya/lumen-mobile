@@ -32,13 +32,15 @@ function AppBootstrap() {
   useNotificationSync();
   const { fetchConfig } = useConfigStore();
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const fetchProfile = useAuthStore(s => s.fetchProfile);
 
   useEffect(() => {
     if (isAuthenticated) {
+      fetchProfile();
       fetchConfig();
       flushQueue();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchConfig, fetchProfile]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

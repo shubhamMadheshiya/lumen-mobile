@@ -28,7 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { emoji: '📚', title: 'Template library',         subtitle: 'Add ready-made trackers', route: '/customize/templates' },
   { emoji: '💊', title: 'Medications',              subtitle: 'Your medication list', route: '/customize/medications' },
   { emoji: '🔔', title: 'Reminders',               subtitle: 'Time and inactivity alerts', route: '/customize/reminders' },
-  { emoji: '📏', title: 'Custom units',             subtitle: 'Add your own measurement units', route: '/customize/units' },
+  { emoji: '👤', title: 'Profile & Settings',       subtitle: 'Personal info, conditions & app preferences', route: '/settings' },
   { emoji: '📤', title: 'Export config',            subtitle: 'Back up or share your setup', route: '/customize/export' },
 ];
 

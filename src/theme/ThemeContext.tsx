@@ -50,7 +50,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(PREF_KEY, scheme).catch(() => {});
   };
 
-  const colorScheme: 'light' | 'dark' = preference === 'system' ? systemScheme : preference;
+  const colorScheme: 'light' | 'dark' =
+    preference === 'system'
+      ? (systemScheme === 'dark' ? 'dark' : 'light')
+      : preference;
   const palette = colorScheme === 'dark' ? darkTokens : lightTokens;
 
   const value = useMemo<ThemeContextValue>(

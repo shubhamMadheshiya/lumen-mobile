@@ -15,7 +15,7 @@
  */
 import { palette as lightPaletteSource } from './colors';
 
-export type ThemeTokens = typeof lightPaletteSource;
+export type ThemeTokens = Record<keyof typeof lightPaletteSource, string>;
 
 export const lightTokens: ThemeTokens = lightPaletteSource;
 

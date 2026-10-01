@@ -96,19 +96,34 @@ export default function TodayScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>{greeting()}{user?.name ? `, ${user.name.split(' ')[0]}` : ''}</Text>
             <Text style={styles.date}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.reminderIconBtn}
-            onPress={() => router.push('/reminders')}
-            accessibilityRole="button"
-            accessibilityLabel="Open Reminders"
-          >
-            <Bell size={20} color={palette.text} />
-            {activeReminders.length > 0 ? <View style={styles.activeNotifDot} /> : null}
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.reminderIconBtn}
+              onPress={() => router.push('/reminders')}
+              accessibilityRole="button"
+              accessibilityLabel="Open Reminders"
+            >
+              <Bell size={20} color={palette.text} />
+              {activeReminders.length > 0 ? <View style={styles.activeNotifDot} /> : null}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.profileAvatarBtn}
+              onPress={() => router.push('/settings')}
+              accessibilityRole="button"
+              accessibilityLabel="Open Profile & Settings"
+            >
+              <Text style={styles.avatarText}>
+                {user?.name
+                  ? user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+                  : 'U'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Day clock card */}
@@ -307,6 +322,30 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: palette.primary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  profileAvatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  avatarText: {
+    ...typography.caption,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   section: {
     gap: 10,

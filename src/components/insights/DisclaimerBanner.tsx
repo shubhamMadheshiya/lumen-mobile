@@ -4,6 +4,7 @@
  */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Info, ChevronDown } from 'lucide-react-native';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
@@ -21,9 +22,16 @@ export function DisclaimerBanner() {
       accessibilityLabel="Insights disclaimer — tap to expand"
     >
       <View style={styles.row}>
-        <Text style={styles.icon}>ℹ️</Text>
+        <View style={styles.iconCircle}>
+          <Info size={15} color={palette.info} strokeWidth={2.4} />
+        </View>
         <Text style={styles.title}>About these insights</Text>
-        <Text style={styles.toggle}>{expanded ? '▲' : '▼'}</Text>
+        <ChevronDown
+          size={16}
+          color={palette.info}
+          strokeWidth={2.2}
+          style={expanded ? styles.chevronExpanded : undefined}
+        />
       </View>
       {expanded && (
         <Text style={styles.body}>
@@ -47,9 +55,18 @@ const useStyles = createThemedStyles(palette => ({
     padding: 14, gap: 6,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  icon: { fontSize: 16 },
+  iconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.info + '22',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: { ...typography.label, color: palette.info, fontWeight: '700', flex: 1 },
-  toggle: { ...typography.caption, color: palette.info },
+  chevronExpanded: {
+    transform: [{ rotate: '180deg' }],
+  },
   summary: { ...typography.small, color: palette.info + 'CC', lineHeight: 18 },
   body: { ...typography.small, color: palette.textSecondary, lineHeight: 20 },
   bold: { fontWeight: '700', color: palette.text },

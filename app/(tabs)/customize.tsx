@@ -15,6 +15,7 @@ import {
   FolderTree,
   Zap,
   MousePointerClick,
+  LayoutGrid,
   Library,
   Pill,
   Bell,
@@ -55,6 +56,13 @@ const NAV_ITEMS: NavItem[] = [
     title: 'Quick-tap buttons',
     subtitle: 'Manage your home screen buttons',
     route: '/customize/quick-actions',
+  },
+  {
+    icon: LayoutGrid,
+    color: '#06B6D4',
+    title: 'Today at a Glance',
+    subtitle: 'Add, remove & customize home metrics',
+    route: '/customize/at-a-glance',
   },
   {
     icon: Library,

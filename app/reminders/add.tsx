@@ -20,6 +20,7 @@ import { useReminderStore } from '../../src/store/reminderStore';
 import { useConfigStore } from '../../src/store/configStore';
 import { ReminderCategory, ReminderScheduleType, WeekDay } from '@lumen/shared';
 import { SoundPicker } from '../../src/components/SoundPicker';
+import { IconPicker } from '../../src/components/customize/IconPicker';
 
 const ICONS = ['💧', '🚶', '😴', '🧍', '💊', '🧘', '🥗', '☕', '⏰', '🩺', '✨'];
 
@@ -146,18 +147,7 @@ export default function AddReminderScreen() {
 
         {/* Icon Picker */}
         <View style={styles.section}>
-          <Text style={styles.label}>Select Icon</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iconScroll}>
-            {ICONS.map(emoji => (
-              <TouchableOpacity
-                key={emoji}
-                style={[styles.iconChip, icon === emoji && styles.iconChipActive]}
-                onPress={() => setIcon(emoji)}
-              >
-                <Text style={styles.iconEmoji}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <IconPicker value={icon} onChange={setIcon} label="Select Icon" />
         </View>
 
         {/* Category Picker */}

@@ -37,6 +37,7 @@ import {
   Shield,
   Moon,
   Sun,
+  SunMoon,
   Globe,
   Thermometer,
   Clock,
@@ -63,10 +64,14 @@ import { ThemeTokens } from '../src/theme/tokens';
 
 type ThemePref = 'system' | 'light' | 'dark';
 
-const THEME_OPTIONS: { key: ThemePref; label: string; icon: string }[] = [
-  { key: 'system', label: 'System', icon: '🌐' },
-  { key: 'light', label: 'Light', icon: '☀️' },
-  { key: 'dark', label: 'Dark', icon: '🌙' },
+const THEME_OPTIONS: {
+  key: ThemePref;
+  label: string;
+  icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
+}[] = [
+  { key: 'system', label: 'System', icon: SunMoon },
+  { key: 'light', label: 'Light', icon: Sun },
+  { key: 'dark', label: 'Dark', icon: Moon },
 ];
 
 const UNIT_OPTIONS: { key: 'metric' | 'imperial'; label: string; desc: string }[] = [
@@ -738,27 +743,34 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Appearance</Text>
         <View style={styles.card}>
           <View style={styles.segRowTop}>
-            {THEME_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[
-                  styles.seg,
-                  preference === opt.key && styles.segActive,
-                ]}
-                onPress={() => handleThemeChange(opt.key)}
-                {...buttonProps(`${opt.label} theme`, false)}
-              >
-                <Text style={styles.segIcon}>{opt.icon}</Text>
-                <Text
+            {THEME_OPTIONS.map(opt => {
+              const isSelected = preference === opt.key;
+              const IconComp = opt.icon;
+              const iconColor = isSelected ? '#FFFFFF' : palette.textSecondary;
+
+              return (
+                <TouchableOpacity
+                  key={opt.key}
                   style={[
-                    styles.segLabel,
-                    preference === opt.key && styles.segLabelActive,
+                    styles.seg,
+                    isSelected && styles.segActive,
                   ]}
+                  onPress={() => handleThemeChange(opt.key)}
+                  {...buttonProps(`${opt.label} theme`, false)}
+                  activeOpacity={0.8}
                 >
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <IconComp size={16} color={iconColor} strokeWidth={2.2} />
+                  <Text
+                    style={[
+                      styles.segLabel,
+                      isSelected && styles.segLabelActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 

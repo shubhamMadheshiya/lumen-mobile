@@ -11,7 +11,7 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, RefreshControl,
+  TouchableOpacity, RefreshControl, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -27,6 +27,7 @@ import {
   Sun,
   Moon,
   Timer,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
@@ -37,6 +38,7 @@ import { useDaySessionStore } from '../../src/store/daySessionStore';
 import { useQuickLogStore } from '../../src/store/quickLogStore';
 import { useActivityStore } from '../../src/store/activityStore';
 import { useReminderStore } from '../../src/store/reminderStore';
+import { useGlanceConfigStore } from '../../src/store/glanceConfigStore';
 
 import { DayClockCard } from '../../src/components/DayClockCard';
 import { QuickActionButton } from '../../src/components/QuickActionButton';
@@ -53,6 +55,11 @@ export default function TodayScreen() {
   const { todayTaps, fetchTodayTaps } = useQuickLogStore();
   const { todaySummary, fetchTodaySummary, isTracking } = useActivityStore();
   const { reminders, fetchReminders } = useReminderStore();
+  const { fetchGlanceConfig, isMetricEnabled, getActiveCount } = useGlanceConfigStore();
+
+  const { width: windowWidth } = useWindowDimensions();
+  // Screen padding is 16 on each side (32 total), and two 10px gaps between 3 columns (20 total)
+  const quickActionWidth = Math.max(88, Math.floor((windowWidth - 32 - 20) / 3));
 
   const [refreshing, setRefreshing] = useState(false);
   const [waterModalVisible, setWaterModalVisible] = useState(false);
@@ -66,8 +73,9 @@ export default function TodayScreen() {
       fetchTodaySummary(),
       fetchReminders(),
       fetchTodayTaps(),
+      fetchGlanceConfig(),
     ]);
-  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps]);
+  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps, fetchGlanceConfig]);
 
   useEffect(() => {
     loadData();
@@ -241,12 +249,24 @@ export default function TodayScreen() {
         {/* Quick-tap grid */}
         {visibleActions.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick log</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Quick log</Text>
+              <TouchableOpacity
+                onPress={() => router.push('/customize/quick-actions')}
+                style={styles.seeAllBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Manage quick-tap buttons"
+              >
+                <Text style={styles.seeAllText}>Manage</Text>
+                <ChevronRight size={14} color={palette.primary} />
+              </TouchableOpacity>
+            </View>
             <View style={styles.grid}>
               {visibleActions.map(action => (
                 <QuickActionButton
                   key={action._id}
                   action={action}
+                  width={quickActionWidth}
                   onPressOverride={
                     action.templateKey === 'qa_water' || action.label.toLowerCase().includes('water')
                       ? () => {
@@ -265,77 +285,100 @@ export default function TodayScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Today at a glance</Text>
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(tabs)/timeline');
-              }}
-              style={styles.seeAllBtn}
-              accessibilityRole="button"
-              accessibilityLabel="View full timeline"
-            >
-              <Text style={styles.seeAllText}>Timeline</Text>
-              <ChevronRight size={14} color={palette.primary} />
-            </TouchableOpacity>
+            <View style={styles.headerRightActions}>
+              <TouchableOpacity
+                onPress={() => router.push('/customize/at-a-glance')}
+                style={styles.customizeGlanceBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Customize Today at a glance metrics"
+              >
+                <SlidersHorizontal size={13} color={palette.textSecondary} />
+                <Text style={styles.customizeGlanceText}>Customize</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/(tabs)/timeline');
+                }}
+                style={styles.seeAllBtn}
+                accessibilityRole="button"
+                accessibilityLabel="View full timeline"
+              >
+                <Text style={styles.seeAllText}>Timeline</Text>
+                <ChevronRight size={14} color={palette.primary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.glanceGrid}>
-            <GlanceCard
-              icon={Droplets}
-              value={`${waterCount}/${waterGoal}`}
-              label="Water"
-              subtitle={waterGoal ? `${Math.min(100, Math.round((waterCount / waterGoal) * 100))}% goal` : undefined}
-              color={palette.secondary}
-              onPress={() => {
-                setSelectedWaterActionId(waterAction?._id);
-                setWaterModalVisible(true);
-              }}
-            />
+            {isMetricEnabled('water') && (
+              <GlanceCard
+                icon={Droplets}
+                value={`${waterCount}/${waterGoal}`}
+                label="Water"
+                subtitle={waterGoal ? `${Math.min(100, Math.round((waterCount / waterGoal) * 100))}% goal` : undefined}
+                color={palette.secondary}
+                onPress={() => {
+                  setSelectedWaterActionId(waterAction?._id);
+                  setWaterModalVisible(true);
+                }}
+              />
+            )}
 
-            <GlanceCard
-              icon={Footprints}
-              value={`${todayDistanceKm.toFixed(1)} km`}
-              label="Walking"
-              subtitle={isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`}
-              color={palette.primary}
-              onPress={handleStartWalking}
-            />
+            {isMetricEnabled('walking') && (
+              <GlanceCard
+                icon={Footprints}
+                value={`${todayDistanceKm.toFixed(1)} km`}
+                label="Walking"
+                subtitle={isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`}
+                color={palette.primary}
+                onPress={handleStartWalking}
+              />
+            )}
 
-            <GlanceCard
-              icon={Bell}
-              value={`${reminders.filter(r => r.enabled).length} active`}
-              label="Reminders"
-              subtitle={reminders.length > 0 ? `${reminders.length} total` : 'None set'}
-              color={palette.catMood}
-              onPress={() => router.push('/reminders')}
-            />
+            {isMetricEnabled('reminders') && (
+              <GlanceCard
+                icon={Bell}
+                value={`${reminders.filter(r => r.enabled).length} active`}
+                label="Reminders"
+                subtitle={reminders.length > 0 ? `${reminders.length} total` : 'None set'}
+                color={palette.catMood}
+                onPress={() => router.push('/reminders')}
+              />
+            )}
 
-            <GlanceCard
-              icon={Stethoscope}
-              value={`${totalTapCount} logged`}
-              label="Quick logs"
-              subtitle={`${distinctTapCount} metrics`}
-              color={palette.catSymptom}
-              onPress={() => router.push('/(tabs)/timeline')}
-            />
+            {isMetricEnabled('quick_logs') && (
+              <GlanceCard
+                icon={Stethoscope}
+                value={`${totalTapCount} logged`}
+                label="Quick logs"
+                subtitle={`${distinctTapCount} metrics`}
+                color={palette.catSymptom}
+                onPress={() => router.push('/(tabs)/timeline')}
+              />
+            )}
 
-            <GlanceCard
-              icon={wakeTimeStr ? Sun : Moon}
-              value={wakeTimeStr || 'Clock in'}
-              label="Day session"
-              subtitle={todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')}
-              color={palette.catHabits}
-              onPress={() => router.push('/(tabs)/today')}
-            />
+            {isMetricEnabled('day_session') && (
+              <GlanceCard
+                icon={wakeTimeStr ? Sun : Moon}
+                value={wakeTimeStr || 'Clock in'}
+                label="Day session"
+                subtitle={todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')}
+                color={palette.catHabits}
+                onPress={() => router.push('/(tabs)/today')}
+              />
+            )}
 
-            <GlanceCard
-              icon={Timer}
-              value={`${todayWalkingMinutes}m`}
-              label="Active time"
-              subtitle={todayWalkingMinutes > 0 ? 'Today' : 'Start now'}
-              color={palette.catFood}
-              onPress={handleStartWalking}
-            />
+            {isMetricEnabled('active_time') && (
+              <GlanceCard
+                icon={Timer}
+                value={`${todayWalkingMinutes}m`}
+                label="Active time"
+                subtitle={todayWalkingMinutes > 0 ? 'Today' : 'Start now'}
+                color={palette.catFood}
+                onPress={handleStartWalking}
+              />
+            )}
 
             {/* Any custom Quick Actions with daily goals */}
             {customGoalActions.map(action => {
@@ -353,25 +396,25 @@ export default function TodayScreen() {
                 />
               );
             })}
+
+            {/* Empty state when all metrics are hidden */}
+            {getActiveCount() === 0 && customGoalActions.length === 0 && (
+              <TouchableOpacity
+                style={styles.emptyGlanceBox}
+                onPress={() => router.push('/customize/at-a-glance')}
+                activeOpacity={0.75}
+              >
+                <SlidersHorizontal size={20} color={palette.primary} />
+                <Text style={styles.emptyGlanceText}>
+                  All glance cards are hidden. Tap to choose which metrics appear on your dashboard.
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Spacer for FAB */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
-
-      {/* Floating + Log button */}
-      <View style={styles.fabContainer} pointerEvents="box-none">
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push('/log')}
-          accessibilityRole="button"
-          accessibilityLabel="Log a new entry"
-        >
-          <Text style={styles.fabIcon}>+</Text>
-          <Text style={styles.fabText}>Log</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Undo toast */}
       <UndoToast quickActions={config?.quickActions ?? []} />
@@ -629,6 +672,28 @@ const useStyles = createThemedStyles(palette => ({
     flexWrap: 'wrap',
     gap: 10,
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customizeGlanceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.surfaceAlt,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  customizeGlanceText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: palette.textSecondary,
+    fontSize: 11,
+  },
   seeAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -640,6 +705,25 @@ const useStyles = createThemedStyles(palette => ({
     ...typography.caption,
     fontWeight: '600',
     color: palette.primary,
+  },
+  emptyGlanceBox: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: palette.surfaceAlt,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderStyle: 'dashed',
+  },
+  emptyGlanceText: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
   },
   glanceGrid: {
     flexDirection: 'row',
@@ -699,37 +783,5 @@ const useStyles = createThemedStyles(palette => ({
   },
   glanceChevron: {
     opacity: 0.5,
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 24,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  fab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: palette.primary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 9999,
-    shadowColor: palette.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  fabIcon: {
-    fontSize: 22,
-    color: '#FFFFFF',
-    fontWeight: '300',
-    lineHeight: 24,
-  },
-  fabText: {
-    ...typography.body,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 }));

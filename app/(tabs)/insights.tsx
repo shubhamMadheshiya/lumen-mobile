@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { TrendingUp, Sparkles, Download, RefreshCw } from 'lucide-react-native';
 import { useInsights, useRecomputeInsights } from '../../src/hooks/useInsights';
 import { DisclaimerBanner } from '../../src/components/insights/DisclaimerBanner';
 import { InsightCard } from '../../src/components/insights/InsightCard';
@@ -49,7 +50,8 @@ export default function InsightsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Export report"
         >
-          <Text style={styles.exportBtnText}>📊 Export</Text>
+          <Download size={14} color={palette.primary} strokeWidth={2.4} />
+          <Text style={styles.exportBtnText}>Export</Text>
         </TouchableOpacity>
       </View>
 
@@ -69,7 +71,14 @@ export default function InsightsScreen() {
 
         {!isLoading && !hasEnoughData && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📈</Text>
+            <View style={styles.emptyIconContainer}>
+              <View style={styles.emptyIconBadge}>
+                <TrendingUp size={36} color={palette.primary} strokeWidth={2.4} />
+              </View>
+              <View style={styles.sparkleBadge}>
+                <Sparkles size={12} color="#F59E0B" strokeWidth={2.4} />
+              </View>
+            </View>
             <Text style={styles.emptyTitle}>Building your picture</Text>
             <Text style={styles.emptyBody}>
               Insights appear after {MIN_DAYS_FOR_INSIGHTS} days of logging.
@@ -158,7 +167,10 @@ export default function InsightsScreen() {
               >
                 {recompute.isPending
                   ? <ActivityIndicator size="small" color={palette.primary} />
-                  : <Text style={styles.recomputeText}>🔄 Reanalyse now</Text>
+                  : <>
+                      <RefreshCw size={15} color={palette.primary} strokeWidth={2.2} />
+                      <Text style={styles.recomputeText}>Reanalyse now</Text>
+                    </>
                 }
               </TouchableOpacity>
             </View>
@@ -175,13 +187,60 @@ const useStyles = createThemedStyles(palette => ({
   safe: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   heading: { ...typography.h2, color: palette.text },
-  exportBtn: { backgroundColor: palette.surface, borderRadius: 10, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 12, paddingVertical: 6 },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: palette.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
   exportBtnText: { ...typography.small, color: palette.primary, fontWeight: '700' },
   scroll: { padding: 16, gap: 12 },
   center: { alignItems: 'center', paddingVertical: 40, gap: 12 },
   loadingText: { ...typography.body, color: palette.textSecondary },
   emptyState: { backgroundColor: palette.surface, borderRadius: 16, borderWidth: 1, borderColor: palette.border, padding: 24, gap: 10, alignItems: 'center' },
-  emptyIcon: { fontSize: 44 },
+  emptyIconContainer: {
+    position: 'relative',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  emptyIconBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: palette.primary + '14',
+    borderWidth: 1.5,
+    borderColor: palette.primary + '2B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  sparkleBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.surface,
+    borderWidth: 1.5,
+    borderColor: palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
   emptyTitle: { ...typography.h4, color: palette.text },
   emptyBody: { ...typography.body, color: palette.textSecondary, textAlign: 'center', lineHeight: 22 },
   bold: { fontWeight: '700', color: palette.text },

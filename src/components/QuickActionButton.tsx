@@ -10,6 +10,7 @@ import {
   Text,
   StyleSheet,
   Animated,
+  DimensionValue,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme, createThemedStyles } from '../theme/ThemeContext';
@@ -21,9 +22,10 @@ interface Props {
   action: IQuickAction;
   onLongPress?: () => void;
   onPressOverride?: () => void;
+  width?: DimensionValue;
 }
 
-export function QuickActionButton({ action, onLongPress, onPressOverride }: Props): React.ReactElement {
+export function QuickActionButton({ action, onLongPress, onPressOverride, width }: Props): React.ReactElement {
   const { palette } = useTheme();
   const styles = useStyles();
   const { todayTaps, tap } = useQuickLogStore();
@@ -52,7 +54,7 @@ export function QuickActionButton({ action, onLongPress, onPressOverride }: Prop
   }, [action._id, tap, scaleAnim, onPressOverride]);
 
   return (
-    <Animated.View style={[styles.wrapper, { transform: [{ scale: scaleAnim }] }]}>
+    <Animated.View style={[styles.wrapper, width !== undefined ? { width } : null, { transform: [{ scale: scaleAnim }] }]}>
       <TouchableOpacity
         style={[styles.button, { backgroundColor: action.color + '22' }]}
         onPress={handlePress}
@@ -99,16 +101,14 @@ export function QuickActionButton({ action, onLongPress, onPressOverride }: Prop
   );
 }
 
-const BUTTON_SIZE = 90;
-
 const useStyles = createThemedStyles(palette => ({
   wrapper: {
-    width: BUTTON_SIZE,
+    width: '31.3%',
     alignItems: 'center',
   },
   button: {
-    width: BUTTON_SIZE,
-    height: BUTTON_SIZE,
+    width: '100%',
+    aspectRatio: 1,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',

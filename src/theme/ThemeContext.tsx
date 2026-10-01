@@ -53,7 +53,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setPreferenceState(stored);
         if (typeof (Appearance as any).setColorScheme === 'function') {
           try {
-            (Appearance as any).setColorScheme(stored === 'system' ? null : stored);
+            (Appearance as any).setColorScheme(stored === 'system' ? 'unspecified' : stored);
           } catch {}
         }
       }
@@ -65,7 +65,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(PREF_KEY, scheme).catch(() => {});
     if (typeof (Appearance as any).setColorScheme === 'function') {
       try {
-        (Appearance as any).setColorScheme(scheme === 'system' ? null : scheme);
+        (Appearance as any).setColorScheme(scheme === 'system' ? 'unspecified' : scheme);
       } catch {}
     }
   }, []);

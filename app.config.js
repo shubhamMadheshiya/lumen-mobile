@@ -67,7 +67,7 @@ module.exports = {
       googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '',
       googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '',
       googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '',
-      eas: { projectId: '' },
+      eas: { projectId: '08e8f5ec-be22-413f-9bdb-348811301173' },
     },
   },
 };

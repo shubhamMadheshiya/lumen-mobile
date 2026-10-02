@@ -1,5 +1,4 @@
-import '../src/utils/uuid';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -13,6 +12,8 @@ import { flushQueue } from '../src/services/mediaUpload';
 import { useConfigStore } from '../src/store/configStore';
 import { useAuthStore } from '../src/store/authStore';
 import { installGlobalAlert, CustomAlertModal } from '../src/components/alert';
+import { InitialPermissionsModal } from '../src/components/permissions/InitialPermissionsModal';
+import { permissionService } from '../src/services/permissionService';
 
 // Install custom alert interceptor globally for all Alert.alert() calls
 try {
@@ -43,9 +44,15 @@ function AppBootstrap() {
   const { fetchConfig } = useConfigStore();
   const initAuth = useAuthStore(s => s.initAuth);
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const [showInitialPrimer, setShowInitialPrimer] = useState(false);
 
   useEffect(() => {
     initAuth();
+    permissionService.hasSeenInitialPrimer().then((hasSeen) => {
+      if (!hasSeen) {
+        setShowInitialPrimer(true);
+      }
+    });
   }, [initAuth]);
 
   useEffect(() => {
@@ -65,6 +72,10 @@ function AppBootstrap() {
         }}
       />
       <CustomAlertModal />
+      <InitialPermissionsModal
+        visible={showInitialPrimer}
+        onComplete={() => setShowInitialPrimer(false)}
+      />
     </>
   );
 }

@@ -2,21 +2,22 @@
  * QuickLogButton — one-tap shortcut to log prioritized questions (max 5) across all categories.
  * Configured in /customize/quick-log-questions.
  */
-import React, { useEffect } from 'react';
-import { TouchableOpacity, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Text, View, Animated } from 'react-native';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { Zap } from 'lucide-react-native';
 import { useConfigStore } from '../store/configStore';
 import { useQuickLogConfigStore } from '../store/quickLogConfigStore';
 import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
+import { PressableScale } from './common/PressableScale';
 
 export function QuickLogButton() {
   const { palette } = useTheme();
   const styles = useStyles();
   const { config } = useConfigStore();
   const { selectedQuestionIds, loadSelectedQuestions } = useQuickLogConfigStore();
+  const zapPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (config?.questions) {
@@ -24,24 +25,46 @@ export function QuickLogButton() {
     }
   }, [config?.questions, loadSelectedQuestions]);
 
+  useEffect(() => {
+    // Subtle ambient energy pulse for quick log zap icon
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(zapPulse, {
+          toValue: 1.12,
+          duration: 1600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(zapPulse, {
+          toValue: 1,
+          duration: 1600,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [zapPulse]);
+
   const count = selectedQuestionIds.length;
 
-  const handlePress = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handlePress = () => {
     router.push('/quick-log');
   };
 
   return (
-    <TouchableOpacity
+    <PressableScale
       style={styles.btn}
       onPress={handlePress}
+      haptic="medium"
+      activeScale={0.97}
       accessibilityRole="button"
       accessibilityLabel={`Quick Log — fast entry for ${count > 0 ? count : 5} priority questions`}
-      activeOpacity={0.8}
     >
       <View style={styles.inner}>
         <View style={styles.iconCircle}>
-          <Zap size={20} color={palette.primary} fill={palette.primary} />
+          <Animated.View style={{ transform: [{ scale: zapPulse }] }}>
+            <Zap size={20} color={palette.primary} fill={palette.primary} />
+          </Animated.View>
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.labelRow}>
@@ -55,7 +78,7 @@ export function QuickLogButton() {
           <Text style={styles.sub}>Fast entry for your key metrics</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
 

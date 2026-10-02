@@ -35,15 +35,52 @@ export function QuickActionButton({ action, onLongPress, onPressOverride, width 
     ? new Date(tapData.lastAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null;
 
-  // Pulse animation
+  // Physical press spring animation
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const badgeScaleAnim = React.useRef(new Animated.Value(1)).current;
+  const prevCount = React.useRef(count);
+
+  // Pop the badge whenever count changes
+  React.useEffect(() => {
+    if (count !== prevCount.current && count > 0) {
+      prevCount.current = count;
+      Animated.sequence([
+        Animated.spring(badgeScaleAnim, {
+          toValue: 1.35,
+          friction: 4,
+          tension: 240,
+          useNativeDriver: true,
+        }),
+        Animated.spring(badgeScaleAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [count, badgeScaleAnim]);
+
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.90,
+      friction: 6,
+      tension: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 110,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim]);
 
   const handlePress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.92, duration: 80, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1,    duration: 120, useNativeDriver: true }),
-    ]).start();
 
     if (onPressOverride) {
       onPressOverride();
@@ -51,24 +88,34 @@ export function QuickActionButton({ action, onLongPress, onPressOverride, width 
     }
 
     await tap(action._id);
-  }, [action._id, tap, scaleAnim, onPressOverride]);
+  }, [action._id, tap, onPressOverride]);
 
   return (
     <Animated.View style={[styles.wrapper, width !== undefined ? { width } : null, { transform: [{ scale: scaleAnim }] }]}>
       <TouchableOpacity
         style={[styles.button, { backgroundColor: action.color + '22' }]}
         onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         onLongPress={onLongPress}
         delayLongPress={500}
         accessibilityLabel={`${action.label}, tapped ${count} times today`}
         accessibilityRole="button"
-        activeOpacity={0.8}
+        activeOpacity={0.92}
       >
-        {/* Count badge */}
+        {/* Count badge with pop animation */}
         {count > 0 && (
-          <View style={[styles.badge, { backgroundColor: action.color }]}>
+          <Animated.View
+            style={[
+              styles.badge,
+              {
+                backgroundColor: action.color,
+                transform: [{ scale: badgeScaleAnim }],
+              },
+            ]}
+          >
             <Text style={styles.badgeText}>{count}</Text>
-          </View>
+          </Animated.View>
         )}
 
         {/* Icon */}

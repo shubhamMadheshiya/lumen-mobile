@@ -4,8 +4,10 @@
  */
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
+import { PressableScale } from '../common/PressableScale';
 
 export interface DaySeverity {
   date: string; // 'YYYY-MM-DD'
@@ -121,25 +123,29 @@ export function CalendarHeatMap({
       {/* Header with Title and Mode Switcher */}
       <View style={styles.header}>
         <View style={styles.navGroup}>
-          <TouchableOpacity
+          <PressableScale
             onPress={handlePrev}
             style={styles.navBtn}
+            haptic="light"
+            activeScale={0.92}
             accessibilityRole="button"
             accessibilityLabel={viewMode === 'week' ? 'Previous week' : 'Previous month'}
           >
-            <Text style={styles.navArrow}>‹</Text>
-          </TouchableOpacity>
+            <ChevronLeft size={16} color={palette.text} strokeWidth={2.4} />
+          </PressableScale>
           <Text style={styles.monthLabel}>
             {MONTH_NAMES[month]} {year}
           </Text>
-          <TouchableOpacity
+          <PressableScale
             onPress={handleNext}
             style={styles.navBtn}
+            haptic="light"
+            activeScale={0.92}
             accessibilityRole="button"
             accessibilityLabel={viewMode === 'week' ? 'Next week' : 'Next month'}
           >
-            <Text style={styles.navArrow}>›</Text>
-          </TouchableOpacity>
+            <ChevronRight size={16} color={palette.text} strokeWidth={2.4} />
+          </PressableScale>
         </View>
 
         {/* View Mode Toggle Pill (Week vs Month) */}
@@ -148,6 +154,7 @@ export function CalendarHeatMap({
             <TouchableOpacity
               style={[styles.modeBtn, viewMode === 'week' && styles.modeBtnActive]}
               onPress={() => onToggleViewMode('week')}
+              activeOpacity={0.8}
             >
               <Text style={[styles.modeText, viewMode === 'week' && styles.modeTextActive]}>
                 Week
@@ -156,6 +163,7 @@ export function CalendarHeatMap({
             <TouchableOpacity
               style={[styles.modeBtn, viewMode === 'month' && styles.modeBtnActive]}
               onPress={() => onToggleViewMode('month')}
+              activeOpacity={0.8}
             >
               <Text style={[styles.modeText, viewMode === 'month' && styles.modeTextActive]}>
                 Month
@@ -176,14 +184,22 @@ export function CalendarHeatMap({
               const isSelected = item.iso === selectedDate;
 
               return (
-                <TouchableOpacity
-                  key={i}
+                <PressableScale
+                  key={item.iso}
                   style={styles.weekCol}
                   onPress={() => onSelectDate(item.iso)}
+                  haptic="selection"
+                  activeScale={0.92}
                   accessibilityRole="button"
                   accessibilityLabel={`${item.dayOfWeek} ${item.dayNum}`}
                 >
-                  <Text style={[styles.dayHeader, isSelected && styles.dayHeaderSelected]}>
+                  <Text
+                    style={[
+                      styles.dayHeader,
+                      isToday && styles.dayHeaderToday,
+                      isSelected && styles.dayHeaderSelected,
+                    ]}
+                  >
                     {item.dayOfWeek}
                   </Text>
                   <View
@@ -205,7 +221,7 @@ export function CalendarHeatMap({
                     </Text>
                     {info?.hasLogs && !isSelected && <View style={styles.dot} />}
                   </View>
-                </TouchableOpacity>
+                </PressableScale>
               );
             })}
           </View>
@@ -293,49 +309,62 @@ const CELL_SIZE = 38;
 const useStyles = createThemedStyles(palette => ({
   wrap: {
     backgroundColor: palette.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: palette.border,
-    padding: 12,
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   navGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
   },
-  navBtn: { padding: 4 },
-  navArrow: { ...typography.h3, color: palette.primary, fontSize: 20 },
+  navBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
   monthLabel: { ...typography.bodyBold, color: palette.text, fontSize: 15 },
   modeToggle: {
     flexDirection: 'row',
     backgroundColor: palette.surfaceAlt,
-    borderRadius: 8,
-    padding: 2,
+    borderRadius: 10,
+    padding: 2.5,
     borderWidth: 1,
     borderColor: palette.border,
   },
   modeBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 7.5,
   },
   modeBtnActive: {
     backgroundColor: palette.primary,
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 1,
   },
   modeText: {
     ...typography.caption,
-    fontSize: 11,
+    fontSize: 11.5,
     color: palette.textSecondary,
     fontWeight: '600',
   },
@@ -344,27 +373,35 @@ const useStyles = createThemedStyles(palette => ({
     fontWeight: '700',
   },
   weekContainer: {
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   weekCol: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   monthContainer: {
-    gap: 2,
+    gap: 3,
   },
   row: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   cell: { width: CELL_SIZE, height: CELL_SIZE, alignItems: 'center', justifyContent: 'center' },
-  dayHeader: { ...typography.caption, color: palette.textDisabled, fontWeight: '700', fontSize: 11 },
+  dayHeader: { ...typography.caption, color: palette.textSecondary, fontWeight: '600', fontSize: 11.5 },
+  dayHeaderToday: { color: palette.primary, fontWeight: '700' },
   dayHeaderSelected: { color: palette.primary, fontWeight: '800' },
-  dayCell: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  today: { borderWidth: 2, borderColor: palette.primary },
-  selected: { backgroundColor: palette.primary },
-  dayNum: { ...typography.small, color: palette.text, fontWeight: '600', fontSize: 13 },
+  dayCell: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  today: { borderWidth: 1.5, borderColor: palette.primary, backgroundColor: palette.primary + '10' },
+  selected: {
+    backgroundColor: palette.primary,
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dayNum: { ...typography.small, color: palette.text, fontWeight: '600', fontSize: 13.5 },
   dayNumSelected: { color: '#FFFFFF', fontWeight: '800' },
-  dayNumToday: { color: palette.primary },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: palette.primary, position: 'absolute', bottom: 2 },
+  dayNumToday: { color: palette.primary, fontWeight: '700' },
+  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: palette.primary, position: 'absolute', bottom: 3 },
   legend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10, gap: 3 },
   legendLabel: { ...typography.caption, color: palette.textDisabled, fontSize: 11 },
   legendDot: { width: 10, height: 10, borderRadius: 3 },

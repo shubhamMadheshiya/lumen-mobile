@@ -19,6 +19,8 @@ import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { sendTestReminderNotification, requestNotificationPermissions } from '../../src/services/notifications';
 import { IReminder, ReminderCategory } from '@lumen/shared';
+import { permissionService } from '../../src/services/permissionService';
+import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
 
 type ReminderTabValue = ReminderCategory | 'ALL' | 'ARCHIVED';
 
@@ -60,21 +62,11 @@ export default function RemindersScreen() {
   };
 
   const [isTestingAlarm, setIsTestingAlarm] = useState(false);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [pendingToggleId, setPendingToggleId] = useState<string | null>(null);
 
-  const handleTestAlarm = async () => {
+  const runTestAlarm = async () => {
     setIsTestingAlarm(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const granted = await requestNotificationPermissions();
-    if (!granted) {
-      setIsTestingAlarm(false);
-      Alert.alert(
-        'Notifications Disabled',
-        'Please enable notifications in your phone settings so Lumen alarms can ring.'
-      );
-      return;
-    }
-
     const success = await sendTestReminderNotification();
     setIsTestingAlarm(false);
     if (success) {
@@ -92,8 +84,27 @@ export default function RemindersScreen() {
     }
   };
 
-  const handleToggle = (id: string) => {
+  const handleTestAlarm = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const notifStatus = await permissionService.checkPermission('notifications');
+    if (!notifStatus.granted) {
+      setShowNotifModal(true);
+      return;
+    }
+    await runTestAlarm();
+  };
+
+  const handleToggle = async (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const item = reminders.find(r => r._id === id);
+    if (item && !item.enabled) {
+      const notifStatus = await permissionService.checkPermission('notifications');
+      if (!notifStatus.granted) {
+        setPendingToggleId(id);
+        setShowNotifModal(true);
+        return;
+      }
+    }
     toggleReminder(id);
   };
 
@@ -335,6 +346,24 @@ export default function RemindersScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <ContextualPermissionModal
+        visible={showNotifModal}
+        permissionType="notifications"
+        onGranted={async () => {
+          setShowNotifModal(false);
+          if (pendingToggleId) {
+            toggleReminder(pendingToggleId);
+            setPendingToggleId(null);
+          } else {
+            await runTestAlarm();
+          }
+        }}
+        onDismiss={() => {
+          setShowNotifModal(false);
+          setPendingToggleId(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,8 @@ import {
 import * as Haptics from 'expo-haptics';
 import { typography } from '../../src/theme/typography';
 import { useActivityStore } from '../../src/store/activityStore';
+import { permissionService } from '../../src/services/permissionService';
+import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
 
 function formatTimer(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -59,11 +61,20 @@ export default function ActiveWalkingScreen() {
     discardWalking,
   } = useActivityStore();
 
+  const [showLocationModal, setShowLocationModal] = useState(false);
+
   useEffect(() => {
-    // If not already tracking, start session on mount
-    if (!isTracking) {
-      startWalking('Outdoor Walk');
+    async function initSession() {
+      if (!isTracking) {
+        const loc = await permissionService.checkPermission('location');
+        if (!loc.granted) {
+          setShowLocationModal(true);
+        } else {
+          startWalking('Outdoor Walk');
+        }
+      }
     }
+    initSession();
   }, []);
 
   const handlePauseResume = async () => {
@@ -253,6 +264,19 @@ export default function ActiveWalkingScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <ContextualPermissionModal
+        visible={showLocationModal}
+        permissionType="location"
+        onGranted={() => {
+          setShowLocationModal(false);
+          startWalking('Outdoor Walk');
+        }}
+        onDismiss={() => {
+          setShowLocationModal(false);
+          safeGoBack('/walking');
+        }}
+      />
     </SafeAreaView>
   );
 }

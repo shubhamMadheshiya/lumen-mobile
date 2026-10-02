@@ -30,6 +30,8 @@ import { useConfigStore } from '../../src/store/configStore';
 import { ReminderCategory, ReminderScheduleType, WeekDay } from '@lumen/shared';
 import { SoundPicker } from '../../src/components/SoundPicker';
 import { IconPicker } from '../../src/components/customize/IconPicker';
+import { permissionService } from '../../src/services/permissionService';
+import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
 
 const ICONS = ['💧', '🚶', '😴', '🧍', '💊', '🧘', '🥗', '☕', '⏰', '🩺', '✨'];
 
@@ -143,12 +145,9 @@ export default function EditReminderScreen() {
     }
   };
 
-  const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert('Reminder Name Required', 'Please enter a name for your reminder.');
-      return;
-    }
+  const [showNotifModal, setShowNotifModal] = useState(false);
 
+  const performSave = async () => {
     setIsSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -177,6 +176,23 @@ export default function EditReminderScreen() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert('Reminder Name Required', 'Please enter a name for your reminder.');
+      return;
+    }
+
+    if (enabled) {
+      const notifStatus = await permissionService.checkPermission('notifications');
+      if (!notifStatus.granted) {
+        setShowNotifModal(true);
+        return;
+      }
+    }
+
+    await performSave();
   };
 
   const handleDelete = () => {
@@ -466,6 +482,16 @@ export default function EditReminderScreen() {
 
         <View style={{ height: 48 }} />
       </ScrollView>
+
+      <ContextualPermissionModal
+        visible={showNotifModal}
+        permissionType="notifications"
+        onGranted={async () => {
+          setShowNotifModal(false);
+          await performSave();
+        }}
+        onDismiss={() => setShowNotifModal(false)}
+      />
     </SafeAreaView>
   );
 }

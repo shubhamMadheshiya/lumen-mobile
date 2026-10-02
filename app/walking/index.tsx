@@ -16,6 +16,8 @@ import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useActivityStore } from '../../src/store/activityStore';
 import { IActivitySession } from '@lumen/shared';
+import { permissionService } from '../../src/services/permissionService';
+import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -55,9 +57,16 @@ export default function WalkingDashboardScreen() {
     setRefreshing(false);
   };
 
-  const handleStart = () => {
+  const [showLocationModal, setShowLocationModal] = useState(false);
+
+  const handleStart = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/walking/active');
+    const locStatus = await permissionService.checkPermission('location');
+    if (locStatus.granted) {
+      router.push('/walking/active');
+    } else {
+      setShowLocationModal(true);
+    }
   };
 
   const todayDistanceKm = todaySummary?.totalDistanceKm ?? 0;
@@ -170,6 +179,16 @@ export default function WalkingDashboardScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <ContextualPermissionModal
+        visible={showLocationModal}
+        permissionType="location"
+        onGranted={() => {
+          setShowLocationModal(false);
+          router.push('/walking/active');
+        }}
+        onDismiss={() => setShowLocationModal(false)}
+      />
     </SafeAreaView>
   );
 }

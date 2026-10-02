@@ -3,11 +3,12 @@
  * Shows "Logged {label}" and an "Undo" button.
  */
 import React, { useEffect, useRef } from 'react';
-import { Animated, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { Animated, Text, StyleSheet } from 'react-native';
 import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { useQuickLogStore } from '../store/quickLogStore';
 import { IQuickAction } from '@lumen/shared';
+import { PressableScale } from './common/PressableScale';
 
 interface Props {
   quickActions: IQuickAction[];
@@ -17,16 +18,27 @@ export function UndoToast({ quickActions }: Props): React.ReactElement | null {
   const styles = useStyles();
   const { undoEntry, undo } = useQuickLogStore();
   const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(24)).current;
+  const scale = useRef(new Animated.Value(0.92)).current;
 
   useEffect(() => {
     if (undoEntry) {
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.delay(4200),
-        Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(translateY, { toValue: 0, friction: 6, tension: 140, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 6, tension: 140, useNativeDriver: true }),
       ]).start();
+
+      const timer = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+          Animated.timing(translateY, { toValue: 16, duration: 250, useNativeDriver: true }),
+        ]).start();
+      }, 4200);
+
+      return () => clearTimeout(timer);
     }
-  }, [undoEntry, opacity]);
+  }, [undoEntry, opacity, translateY, scale]);
 
   if (!undoEntry) return null;
 
@@ -34,13 +46,28 @@ export function UndoToast({ quickActions }: Props): React.ReactElement | null {
   if (!action) return null;
 
   return (
-    <Animated.View style={[styles.toast, { opacity }]}>
+    <Animated.View
+      style={[
+        styles.toast,
+        {
+          opacity,
+          transform: [{ translateY }, { scale }],
+        },
+      ]}
+    >
       <Text style={styles.message}>
         {action.icon} Logged <Text style={styles.bold}>{action.label}</Text>
       </Text>
-      <TouchableOpacity onPress={undo} style={styles.undoBtn} accessibilityRole="button" accessibilityLabel="Undo this log">
+      <PressableScale
+        onPress={undo}
+        style={styles.undoBtn}
+        haptic="medium"
+        activeScale={0.92}
+        accessibilityRole="button"
+        accessibilityLabel="Undo this log"
+      >
         <Text style={styles.undoText}>Undo</Text>
-      </TouchableOpacity>
+      </PressableScale>
     </Animated.View>
   );
 }

@@ -9,12 +9,13 @@ import {
   View, Text, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Plus, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Plus, ChevronDown, ChevronUp, CalendarClock, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction } from '@lumen/shared';
 import { TimelineItem } from './TimelineItem';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
+import { PressableScale } from '../common/PressableScale';
 
 interface Props {
   date: string; // 'YYYY-MM-DD'
@@ -99,21 +100,66 @@ export function DayView({
   }
 
   if (entries.length === 0) {
+    const visibleQuickActions = quickActions.filter(qa => qa.isVisible !== false).slice(0, 3);
+
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyIcon}>📝</Text>
-        <Text style={styles.emptyText}>No logs for this day</Text>
-        <Text style={styles.emptyHint}>
-          Track how you feel, your meals, or symptoms to see them on your timeline.
-        </Text>
-        <TouchableOpacity
-          style={styles.emptyAddBtn}
-          onPress={() => router.push('/log' as any)}
-          activeOpacity={0.8}
-        >
-          <Plus size={16} color="#FFFFFF" />
-          <Text style={styles.emptyAddText}>Log an entry</Text>
-        </TouchableOpacity>
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconContainer}>
+            <View style={styles.emptyIconBadge}>
+              <CalendarClock size={36} color={palette.primary} strokeWidth={2.2} />
+            </View>
+            <View style={styles.sparkleBadge}>
+              <Sparkles size={12} color="#F59E0B" strokeWidth={2.4} />
+            </View>
+          </View>
+          <Text style={styles.emptyText}>No logs for this day</Text>
+          <Text style={styles.emptyHint}>
+            Track how you feel, your meals, or symptoms to see them on your timeline.
+          </Text>
+          <PressableScale
+            style={styles.emptyAddBtn}
+            onPress={() => router.push('/log' as any)}
+            haptic="medium"
+            activeScale={0.95}
+            accessibilityRole="button"
+            accessibilityLabel="Log an entry"
+          >
+            <Plus size={18} color="#FFFFFF" strokeWidth={2.6} />
+            <Text style={styles.emptyAddText}>Log an entry</Text>
+          </PressableScale>
+
+          {visibleQuickActions.length > 0 && (
+            <View style={styles.emptyQuickSection}>
+              <View style={styles.emptyQuickDivider}>
+                <View style={styles.emptyQuickLine} />
+                <Text style={styles.emptyQuickDividerText}>OR QUICK LOG</Text>
+                <View style={styles.emptyQuickLine} />
+              </View>
+              <View style={styles.emptyQuickRow}>
+                {visibleQuickActions.map(qa => (
+                  <PressableScale
+                    key={qa._id}
+                    style={styles.emptyQuickChip}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/log',
+                        params: { quickActionId: qa._id },
+                      } as any)
+                    }
+                    haptic="light"
+                    activeScale={0.93}
+                  >
+                    {qa.icon ? <Text style={styles.emptyQuickIcon}>{qa.icon}</Text> : null}
+                    <Text style={styles.emptyQuickText} numberOfLines={1}>
+                      {qa.label}
+                    </Text>
+                  </PressableScale>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
       </View>
     );
   }
@@ -130,10 +176,11 @@ export function DayView({
 
         {/* Global Expand all / Collapse all toggle button */}
         {entries.length > 0 && (
-          <TouchableOpacity
+          <PressableScale
             style={styles.expandAllBtn}
             onPress={toggleAllExpanded}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            haptic="light"
+            activeScale={0.92}
             accessibilityRole="button"
             accessibilityLabel={allExpanded ? 'Collapse all logs' : 'Expand all logs'}
           >
@@ -145,7 +192,7 @@ export function DayView({
             ) : (
               <ChevronDown size={14} color={palette.primary} />
             )}
-          </TouchableOpacity>
+          </PressableScale>
         )}
       </View>
 
@@ -197,28 +244,154 @@ const useStyles = createThemedStyles(palette => ({
     paddingBottom: 40,
   },
   center: {
-    padding: 48,
+    paddingVertical: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
   },
-  emptyIcon: { fontSize: 44 },
-  emptyText: { ...typography.body, color: palette.textSecondary, textAlign: 'center', fontWeight: '500' },
-  emptyHint: { ...typography.small, color: palette.textDisabled, textAlign: 'center', maxWidth: 260 },
+  emptyContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+  emptyCard: {
+    backgroundColor: palette.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingVertical: 32,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  emptyIconContainer: {
+    position: 'relative',
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  emptyIconBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: palette.primary + '14',
+    borderWidth: 1.5,
+    borderColor: palette.primary + '2B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  sparkleBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.surface,
+    borderWidth: 1.5,
+    borderColor: palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  emptyText: {
+    ...typography.h3,
+    fontSize: 18,
+    color: palette.text,
+    textAlign: 'center',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  emptyHint: {
+    ...typography.body,
+    fontSize: 13.5,
+    color: palette.textSecondary,
+    textAlign: 'center',
+    maxWidth: 260,
+    lineHeight: 20,
+  },
   emptyAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: palette.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 13,
+    borderRadius: 16,
+    marginTop: 20,
+    shadowColor: palette.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 3,
   },
   emptyAddText: {
     ...typography.bodyBold,
     color: '#FFFFFF',
+    fontSize: 15,
+  },
+  emptyQuickSection: {
+    width: '100%',
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  emptyQuickDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    marginBottom: 12,
+  },
+  emptyQuickLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: palette.border,
+  },
+  emptyQuickDividerText: {
+    ...typography.caption,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: palette.textDisabled,
+    letterSpacing: 0.8,
+  },
+  emptyQuickRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  emptyQuickChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  emptyQuickIcon: {
     fontSize: 14,
+  },
+  emptyQuickText: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+    color: palette.text,
   },
   headerRow: {
     flexDirection: 'row',

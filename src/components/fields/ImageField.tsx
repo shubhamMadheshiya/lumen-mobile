@@ -12,6 +12,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { FieldDefinition } from '@lumen/shared';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
+import { permissionService, PermissionType } from '../../services/permissionService';
+import { ContextualPermissionModal } from '../permissions/ContextualPermissionModal';
 
 interface Props {
   field: FieldDefinition;
@@ -26,40 +28,51 @@ export function ImageField({ field, value, onChange }: Props) {
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const sensitive = field.sensitive ?? false;
 
-  const requestAndLaunch = async (source: 'camera' | 'gallery') => {
-    const { status } = source === 'camera'
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+  const [activePermModal, setActivePermModal] = useState<PermissionType | null>(null);
 
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission needed',
-        source === 'camera'
-          ? 'Camera access is required to take a photo.'
-          : 'Photo library access is required.',
-      );
+  const launchPicker = async (source: 'camera' | 'gallery') => {
+    try {
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.8,
+            exif: false,  // strip EXIF including GPS
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsMultipleSelection: true,
+            quality: 0.8,
+            exif: false,
+          });
+
+      if (result.canceled) return;
+
+      const newUris = result.assets.map(a => a.uri);
+      const combined = [...value, ...newUris].slice(0, MAX_IMAGES);
+      onChange(combined);
+    } catch (e) {
+      console.warn('[ImageField] launchPicker error:', e);
+    }
+  };
+
+  const requestAndLaunch = async (source: 'camera' | 'gallery') => {
+    const permType: PermissionType = source === 'camera' ? 'camera' : 'mediaLibrary';
+    const check = await permissionService.checkPermission(permType);
+
+    if (check.granted) {
+      await launchPicker(source);
       return;
     }
 
-    const result = source === 'camera'
-      ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          quality: 0.8,
-          exif: false,  // strip EXIF including GPS
-        })
-      : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsMultipleSelection: true,
-          quality: 0.8,
-          exif: false,
-        });
+    const req = await permissionService.requestPermission(permType);
+    if (req.granted) {
+      await launchPicker(source);
+      return;
+    }
 
-    if (result.canceled) return;
-
-    const newUris = result.assets.map(a => a.uri);
-    const combined = [...value, ...newUris].slice(0, MAX_IMAGES);
-    onChange(combined);
+    // Denied -> show contextual modal with guidance & settings link
+    setActivePermModal(permType);
   };
 
   const remove = (idx: number) => {
@@ -139,6 +152,19 @@ export function ImageField({ field, value, onChange }: Props) {
       )}
 
       {field.helpText ? <Text style={styles.hint}>{field.helpText}</Text> : null}
+
+      {activePermModal && (
+        <ContextualPermissionModal
+          visible={Boolean(activePermModal)}
+          permissionType={activePermModal}
+          onGranted={async () => {
+            const src = activePermModal === 'camera' ? 'camera' : 'gallery';
+            setActivePermModal(null);
+            await launchPicker(src);
+          }}
+          onDismiss={() => setActivePermModal(null)}
+        />
+      )}
     </View>
   );
 }

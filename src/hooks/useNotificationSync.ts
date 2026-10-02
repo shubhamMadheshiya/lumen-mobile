@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { useReminderStore } from '../store/reminderStore';
 import {
   syncReminders,
-  requestNotificationPermissions,
+  ensureNotificationChannel,
   setupNotificationCategories,
   handleNotificationActionResponse,
 } from '../services/notifications';
@@ -24,7 +24,7 @@ export function useNotificationSync() {
 
   useEffect(() => {
     (async () => {
-      await requestNotificationPermissions();
+      await ensureNotificationChannel();
       await setupNotificationCategories();
       await fetchReminders();
     })();

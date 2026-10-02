@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
-  TouchableOpacity,
+  Animated,
+  Pressable,
   StyleSheet,
   Platform,
   useWindowDimensions,
@@ -52,7 +53,7 @@ export default function TabLayout() {
         options={{
           title: 'Today',
           tabBarIcon: ({ color, focused }) => (
-            <Home size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+            <AnimatedTabBarIcon IconComponent={Home} color={color} focused={focused} />
           ),
         }}
       />
@@ -61,7 +62,7 @@ export default function TabLayout() {
         options={{
           title: 'Timeline',
           tabBarIcon: ({ color, focused }) => (
-            <CalendarDays size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+            <AnimatedTabBarIcon IconComponent={CalendarDays} color={color} focused={focused} />
           ),
         }}
       />
@@ -87,7 +88,7 @@ export default function TabLayout() {
         options={{
           title: 'Insights',
           tabBarIcon: ({ color, focused }) => (
-            <Sparkles size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+            <AnimatedTabBarIcon IconComponent={Sparkles} color={color} focused={focused} />
           ),
         }}
       />
@@ -96,11 +97,87 @@ export default function TabLayout() {
         options={{
           title: 'Customize',
           tabBarIcon: ({ color, focused }) => (
-            <SlidersHorizontal size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+            <AnimatedTabBarIcon IconComponent={SlidersHorizontal} color={color} focused={focused} />
           ),
         }}
       />
     </Tabs>
+  );
+}
+
+/**
+ * Animated Tab Bar Icon
+ * Delivers playful spring scale bounce on selection + active dot indicator
+ */
+function AnimatedTabBarIcon({
+  IconComponent,
+  color,
+  focused,
+}: {
+  IconComponent: React.ComponentType<{ size: number; color: any; strokeWidth: number }>;
+  color: any;
+  focused: boolean;
+}) {
+  const { palette } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(focused ? 1 : 0.95)).current;
+  const dotScaleAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (focused) {
+      Animated.parallel([
+        Animated.sequence([
+          Animated.spring(scaleAnim, {
+            toValue: 1.2,
+            friction: 4,
+            tension: 220,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: 5,
+            tension: 110,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.spring(dotScaleAnim, {
+          toValue: 1,
+          friction: 6,
+          tension: 140,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(dotScaleAnim, {
+          toValue: 0,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [focused, scaleAnim, dotScaleAnim]);
+
+  return (
+    <View style={styles.tabIconWrap}>
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <IconComponent size={22} color={color} strokeWidth={focused ? 2.4 : 1.8} />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.tabActiveDot,
+          {
+            backgroundColor: palette.primary,
+            transform: [{ scale: dotScaleAnim }],
+            opacity: dotScaleAnim,
+          },
+        ]}
+      />
+    </View>
   );
 }
 
@@ -152,34 +229,134 @@ function CurvedTabBarBackground() {
   );
 }
 
+/**
+ * Center Add Button
+ * Floating central hub with:
+ * 1. Ambient breathing pulse halo
+ * 2. Physical spring compression on touch
+ * 3. 45° rotation micro-animation
+ */
 function CenterAddButton({ onPress }: { onPress: () => void }) {
   const { palette } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Ambient gentle breathing halo
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.18,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.88,
+        friction: 6,
+        tension: 180,
+        useNativeDriver: true,
+      }),
+      Animated.spring(rotateAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 4,
+        tension: 90,
+        useNativeDriver: true,
+      }),
+      Animated.spring(rotateAnim, {
+        toValue: 0,
+        friction: 5,
+        tension: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '45deg'],
+  });
 
   return (
     <View style={styles.centerButtonContainer} pointerEvents="box-none">
-      <TouchableOpacity
+      {/* Ambient breathing halo ring */}
+      <Animated.View
         style={[
-          styles.centerButton,
+          styles.ambientHalo,
           {
             backgroundColor: palette.primary,
-            shadowColor: palette.primary,
+            transform: [{ scale: pulseAnim }],
+            opacity: pulseAnim.interpolate({
+              inputRange: [1, 1.18],
+              outputRange: [0.26, 0.05],
+            }),
           },
         ]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          onPress();
-        }}
-        activeOpacity={0.88}
-        accessibilityRole="button"
-        accessibilityLabel="Log a new metric"
-      >
-        <Plus size={26} color="#FFFFFF" strokeWidth={2.8} />
-      </TouchableOpacity>
+      />
+
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <Pressable
+          style={[
+            styles.centerButton,
+            {
+              backgroundColor: palette.primary,
+              shadowColor: palette.primary,
+            },
+          ]}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onPress();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Log a new metric"
+        >
+          <Animated.View style={{ transform: [{ rotate: spin }] }}>
+            <Plus size={26} color="#FFFFFF" strokeWidth={2.8} />
+          </Animated.View>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  tabIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 28,
+  },
+  tabActiveDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 2,
+  },
   centerButtonContainer: {
     position: 'absolute',
     top: -24,
@@ -188,6 +365,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+  ambientHalo: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
   centerButton: {
     width: 50,

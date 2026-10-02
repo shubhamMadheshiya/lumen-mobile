@@ -17,6 +17,7 @@ import { Sun, Sunrise, Moon } from 'lucide-react-native';
 import { useTheme, createThemedStyles } from '../theme/ThemeContext';
 import { typography } from '../theme/typography';
 import { useDaySessionStore } from '../store/daySessionStore';
+import { PressableScale } from './common/PressableScale';
 
 function formatTime(iso?: string): string {
   if (!iso) return '—';
@@ -75,13 +76,14 @@ export function DayClockCard(): React.ReactElement {
 
   if (hasWoken) {
     return (
-      <TouchableOpacity
+      <PressableScale
         style={[styles.card, styles.awakeCard]}
         onPress={handlePress}
         disabled={isLoading}
+        haptic="medium"
+        activeScale={0.97}
         accessibilityLabel="Record going to bed"
         accessibilityRole="button"
-        activeOpacity={0.85}
       >
         <View style={styles.row}>
           <View style={styles.iconBadgeSunrise}>
@@ -99,19 +101,20 @@ export function DayClockCard(): React.ReactElement {
           <Moon size={16} color={palette.text} style={{ marginRight: 6 }} />
           <Text style={styles.sleepButtonText}>Go to bed</Text>
         </View>
-      </TouchableOpacity>
+      </PressableScale>
     );
   }
 
   // Not woken yet
   return (
-    <TouchableOpacity
+    <PressableScale
       style={[styles.card, styles.sleepingCard]}
       onPress={handlePress}
       disabled={isLoading}
+      haptic="medium"
+      activeScale={0.97}
       accessibilityLabel="Record waking up"
       accessibilityRole="button"
-      activeOpacity={0.85}
     >
       <View style={styles.row}>
         <View style={styles.iconBadgeSun}>
@@ -122,7 +125,7 @@ export function DayClockCard(): React.ReactElement {
           <Text style={styles.subtitle}>Tap when you're awake</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
 

@@ -17,7 +17,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Search, X, Camera, RotateCcw } from 'lucide-react-native';
+import { Search, X, Camera, RotateCcw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useConfigStore } from '../../src/store/configStore';
 import { CalendarHeatMap } from '../../src/components/timeline/CalendarHeatMap';
 import { DayView } from '../../src/components/timeline/DayView';
@@ -25,6 +26,7 @@ import { useTimelineSummary, useDayEntries } from '../../src/hooks/useTimelineSu
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { api } from '../../src/api/client';
+import { PressableScale } from '../../src/components/common/PressableScale';
 
 function toISO(d: Date) { return d.toISOString().slice(0, 10); }
 
@@ -232,9 +234,20 @@ export default function TimelineScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.heading}>Timeline</Text>
-        <TouchableOpacity onPress={() => setShowCalendar(v => !v)} style={styles.toggleBtn}>
-          <Text style={styles.toggleText}>{showCalendar ? 'Hide calendar' : 'Show calendar'}</Text>
-        </TouchableOpacity>
+        <PressableScale
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowCalendar(v => !v);
+          }}
+          style={styles.toggleChip}
+          haptic="none"
+          activeScale={0.93}
+          accessibilityRole="button"
+          accessibilityLabel={showCalendar ? 'Hide calendar' : 'Show calendar'}
+        >
+          <Calendar size={13} color={palette.primary} strokeWidth={2.2} />
+          <Text style={styles.toggleChipText}>{showCalendar ? 'Hide calendar' : 'Show calendar'}</Text>
+        </PressableScale>
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -257,15 +270,22 @@ export default function TimelineScreen() {
           </View>
         )}
 
-        {/* Day nav bar */}
-        <View style={styles.dayNav}>
-          <TouchableOpacity onPress={prevDay} style={styles.dayNavBtn} accessibilityRole="button" accessibilityLabel="Previous day">
-            <Text style={styles.dayNavArrow}>‹</Text>
-          </TouchableOpacity>
+        {/* Day nav card */}
+        <View style={styles.dayNavCard}>
+          <PressableScale
+            onPress={prevDay}
+            style={styles.dayNavArrowBtn}
+            haptic="light"
+            activeScale={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Previous day"
+          >
+            <ChevronLeft size={18} color={palette.primary} strokeWidth={2.4} />
+          </PressableScale>
           <View style={styles.dayNavCenter}>
             <Text style={styles.dayLabel}>
               {isToday
-                ? 'Today'
+                ? `Today • ${new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`
                 : new Date(selectedDate + 'T12:00:00').toLocaleDateString(undefined, {
                     weekday: 'short',
                     month: 'short',
@@ -273,26 +293,29 @@ export default function TimelineScreen() {
                   })}
             </Text>
             {!isToday && (
-              <TouchableOpacity
+              <PressableScale
                 onPress={() => jumpToDate(today)}
                 style={styles.todayPill}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                haptic="light"
+                activeScale={0.92}
                 accessibilityRole="button"
                 accessibilityLabel="Jump to Today"
               >
                 <Text style={styles.todayPillText}>Today</Text>
-              </TouchableOpacity>
+              </PressableScale>
             )}
           </View>
-          <TouchableOpacity
+          <PressableScale
             onPress={nextDay}
-            style={[styles.dayNavBtn, isToday && styles.dim]}
+            style={[styles.dayNavArrowBtn, isToday && styles.dim]}
             disabled={isToday}
+            haptic="light"
+            activeScale={0.88}
             accessibilityRole="button"
             accessibilityLabel="Next day"
           >
-            <Text style={styles.dayNavArrow}>›</Text>
-          </TouchableOpacity>
+            <ChevronRight size={18} color={palette.primary} strokeWidth={2.4} />
+          </PressableScale>
         </View>
 
         {/* Search Bar */}
@@ -462,32 +485,64 @@ const useStyles = createThemedStyles(palette => ({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 4,
   },
-  heading: { ...typography.h2, color: palette.text },
-  toggleBtn: { padding: 6 },
-  toggleText: { ...typography.small, color: palette.primary, fontWeight: '600' },
+  heading: { ...typography.h2, color: palette.text, fontSize: 24, fontWeight: '800' },
+  toggleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: palette.primary + '14',
+    borderWidth: 1,
+    borderColor: palette.primary + '2E',
+  },
+  toggleChipText: {
+    ...typography.caption,
+    color: palette.primary,
+    fontWeight: '700',
+    fontSize: 12,
+  },
   scroll: { flex: 1 },
-  calWrap: { padding: 12, paddingBottom: 4, backgroundColor: palette.background },
-  dayNav: {
+  calWrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, backgroundColor: palette.background },
+  dayNavCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border,
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
     backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: palette.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  dayNavBtn: { padding: 6 },
-  dayNavArrow: { ...typography.h3, color: palette.primary },
+  dayNavArrowBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
   dayNavCenter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  dayLabel: { ...typography.bodyBold, color: palette.text },
+  dayLabel: { ...typography.bodyBold, color: palette.text, fontSize: 14.5 },
   todayPill: {
     backgroundColor: palette.primary + '18',
     paddingHorizontal: 8,
@@ -502,7 +557,7 @@ const useStyles = createThemedStyles(palette => ({
     fontWeight: '700',
     fontSize: 11,
   },
-  dim: { opacity: 0.3 },
+  dim: { opacity: 0.25 },
 
   // Search
   searchSection: {

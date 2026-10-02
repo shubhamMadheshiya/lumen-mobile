@@ -1,8 +1,8 @@
 /**
  * Sound Service for Lumen Reminders & Alarms.
- * Manages in-app sound playback and preview for custom alarm tones using expo-av.
- * Uses resilient dynamic loading with graceful haptic fallback if ExponentAV
- * native module is not yet compiled into the running APK.
+ * Manages in-app sound playback and preview for custom alarm tones using modern expo-audio.
+ * Uses resilient dynamic loading with graceful haptic fallback if native audio
+ * binary is not present in the current runtime environment.
  */
 import * as Haptics from 'expo-haptics';
 
@@ -59,16 +59,15 @@ export const SOUND_OPTIONS: SoundOption[] = [
   },
 ];
 
-// Resilient native module loader
+// Resilient native module loader for modern expo-audio
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let Audio: any = null;
+let ExpoAudio: any = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const av = require('expo-av');
-  Audio = av?.Audio || null;
+  ExpoAudio = require('expo-audio');
 } catch {
-  // ExponentAV native binary is not bundled in the current installed APK
-  Audio = null;
+  // Graceful fallback for headless or restricted environments
+  ExpoAudio = null;
 }
 
 const SOUND_ASSETS: Record<string, any> = {
@@ -87,19 +86,18 @@ let currentPlayingId: string | null = null;
  * Check whether native audio hardware playback is available in the current APK.
  */
 export function isAudioAvailable(): boolean {
-  return Audio != null;
+  return ExpoAudio != null && typeof ExpoAudio.createAudioPlayer === 'function';
 }
 
 /**
  * Configure audio mode to ensure sounds play reliably even in silent/DND mode.
  */
 async function configureAudioMode(): Promise<void> {
-  if (!Audio || typeof Audio.setAudioModeAsync !== 'function') return;
+  if (!ExpoAudio || typeof ExpoAudio.setAudioModeAsync !== 'function') return;
   try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
-      shouldDuckAndroid: true,
+    await ExpoAudio.setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
     });
   } catch (err) {
     console.warn('[SoundService] Failed to set audio mode:', err);
@@ -112,8 +110,12 @@ async function configureAudioMode(): Promise<void> {
 export async function stopSound(): Promise<void> {
   if (currentSound) {
     try {
-      await currentSound.stopAsync();
-      await currentSound.unloadAsync();
+      if (typeof currentSound.pause === 'function') {
+        currentSound.pause();
+      }
+      if (typeof currentSound.remove === 'function') {
+        currentSound.remove();
+      }
     } catch {
       // Ignore unload errors
     } finally {
@@ -140,7 +142,7 @@ export async function previewSound(
   await stopSound();
 
   // If native audio is not compiled into the current binary or it's default
-  if (!Audio || soundId === 'default' || !SOUND_ASSETS[soundId]) {
+  if (!isAudioAvailable() || soundId === 'default' || !SOUND_ASSETS[soundId]) {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     onFinish?.();
     return;
@@ -150,20 +152,21 @@ export async function previewSound(
 
   try {
     const asset = SOUND_ASSETS[soundId];
-    const { sound } = await Audio.Sound.createAsync(
-      asset,
-      { shouldPlay: true, isLooping: false, volume: 1.0 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (status: any) => {
-        if (status?.isLoaded && status?.didJustFinish) {
+    const player = ExpoAudio.createAudioPlayer(asset);
+    currentSound = player;
+    currentPlayingId = soundId;
+
+    if (player && typeof player.addListener === 'function') {
+      player.addListener('playbackStatusUpdate', (status: any) => {
+        if (status?.didJustFinish) {
           stopSound().catch(() => {});
           onFinish?.();
         }
-      }
-    );
+      });
+    }
 
-    currentSound = sound;
-    currentPlayingId = soundId;
+    player.volume = 1.0;
+    player.play();
   } catch (err) {
     console.warn(`[SoundService] Failed to preview sound "${soundId}":`, err);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -178,7 +181,7 @@ export async function startAlarmSound(soundId: string = 'default'): Promise<void
   await stopSound();
 
   // If native audio module is not present or default sound chosen, native channel handles it
-  if (!Audio || soundId === 'default' || !SOUND_ASSETS[soundId]) {
+  if (!isAudioAvailable() || soundId === 'default' || !SOUND_ASSETS[soundId]) {
     return;
   }
 
@@ -186,13 +189,12 @@ export async function startAlarmSound(soundId: string = 'default'): Promise<void
 
   try {
     const asset = SOUND_ASSETS[soundId];
-    const { sound } = await Audio.Sound.createAsync(
-      asset,
-      { shouldPlay: true, isLooping: true, volume: 1.0 }
-    );
-
-    currentSound = sound;
+    const player = ExpoAudio.createAudioPlayer(asset);
+    currentSound = player;
     currentPlayingId = soundId;
+    player.loop = true;
+    player.volume = 1.0;
+    player.play();
   } catch (err) {
     console.warn(`[SoundService] Failed to start alarm sound "${soundId}":`, err);
   }

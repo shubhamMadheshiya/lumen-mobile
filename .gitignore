@@ -28,3 +28,9 @@ test-results/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Build outputs & artifacts
+build-output/
+*.apk
+*.aab
+*.zip

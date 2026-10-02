@@ -61,7 +61,9 @@ export function OptionSelector({
     answers.some(a => a.optionId === optionId);
 
   const toggle = (option: IOption) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (LayoutAnimation?.configureNext && LayoutAnimation?.Presets?.easeInEaseOut) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     const alreadySelected = isSelected(option._id);
 
     if (alreadySelected) {

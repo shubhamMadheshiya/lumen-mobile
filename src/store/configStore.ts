@@ -34,7 +34,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
   },
 
-  invalidate: () => set({ lastFetchedAt: null }),
+  invalidate: () => set({ config: null, lastFetchedAt: null }),
 
   updateLocalCategory: (id, patch) => {
     const config = get().config;

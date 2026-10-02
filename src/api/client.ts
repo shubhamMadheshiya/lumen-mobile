@@ -109,12 +109,21 @@ export async function apiRequest<T = unknown>(
     throw new ApiError(401, 'Session expired — please log in again');
   }
 
-  const json = await resp.json() as { success: boolean; data?: T; message?: string; errors?: unknown[] };
+  let json: { success?: boolean; data?: T; message?: string; errors?: unknown[] } = {};
+  try {
+    const text = await resp.text();
+    if (text) {
+      json = JSON.parse(text);
+    }
+  } catch {
+    json = {};
+  }
+
   if (!resp.ok) {
     throw new ApiError(resp.status, json.message ?? 'Request failed', json.errors);
   }
 
-  return json.data as T;
+  return (json.data !== undefined ? json.data : (json as unknown as T));
 }
 
 export class ApiError extends Error {

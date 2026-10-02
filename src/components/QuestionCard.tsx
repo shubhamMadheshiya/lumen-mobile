@@ -20,13 +20,12 @@ interface Props {
   tempPrefUnit?: 'C' | 'F';
 }
 
-/** Returns true if this question should be visible based on conditionalDisplay */
 function isVisible(question: IQuestion, sessionAnswers: Answer[]): boolean {
   if (!question.conditionalDisplay) return true;
-  const { questionId: _qid, optionId } = question.conditionalDisplay;
-  // Find all answers across all questions and check if optionId is selected.
-  // (We compare by optionId directly because sessionAnswers are flat across questions.)
-  return sessionAnswers.some(a => a.optionId === optionId);
+  const cond = question.conditionalDisplay as any;
+  const targetOptionId = cond.optionId || cond.requiredOptionId;
+  if (!targetOptionId) return true;
+  return sessionAnswers.some(a => a.optionId === targetOptionId);
 }
 
 export function QuestionCard({

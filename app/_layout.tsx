@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../src/api/queryClient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -32,13 +33,6 @@ if (Platform.OS === 'web') {
     console.warn('[RootLayout] maybeCompleteAuthSession error:', e);
   }
 }
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 2, staleTime: 5 * 60 * 1000 },
-    mutations: { retry: 1 },
-  },
-});
 
 function AppBootstrap() {
   useNotificationSync();

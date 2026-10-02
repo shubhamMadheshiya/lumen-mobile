@@ -11,7 +11,7 @@ jest.mock('../../api/client', () => ({
   },
 }));
 
-const { api } = require('../../api/client');
+let api: any;
 
 // Import AFTER mocking
 let useConfigStore: ReturnType<typeof import('../../store/configStore')['useConfigStore']>;
@@ -20,6 +20,7 @@ let getState: () => ReturnType<typeof useConfigStore>;
 beforeEach(() => {
   jest.resetModules();
   jest.clearAllMocks();
+  api = require('../../api/client').api;
   // Re-import the store fresh for each test so state is reset
   const module = require('../../store/configStore');
   useConfigStore = module.useConfigStore;
@@ -95,7 +96,9 @@ describe('configStore', () => {
   it('sets error state when fetchConfig fails', async () => {
     api.get.mockRejectedValueOnce(new Error('Network error'));
 
-    await act(async () => { await getState().fetchConfig(); });
+    await act(async () => {
+      await getState().fetchConfig().catch(() => {});
+    });
 
     expect(getState().config).toBeNull();
     expect(getState().isLoading).toBe(false);

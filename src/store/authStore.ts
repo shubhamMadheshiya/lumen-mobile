@@ -2,11 +2,16 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IUser, UpdateProfileDto } from '@lumen/shared';
 import { api, saveTokens, clearTokens, getAccessToken } from '../api/client';
+import { queryClient } from '../api/queryClient';
+import { cancelAllNotifications } from '../services/notifications';
 import { useConfigStore } from './configStore';
 import { useDaySessionStore } from './daySessionStore';
 import { useQuickLogStore } from './quickLogStore';
 import { useActivityStore } from './activityStore';
 import { useReminderStore } from './reminderStore';
+import { useSleepTrackerStore } from './sleepTrackerStore';
+import { useSecurityStore } from './securityStore';
+import { useWeatherStore } from './weatherStore';
 
 const USER_CACHE_KEY = 'lumen:auth:user_v1';
 
@@ -22,6 +27,8 @@ interface AuthState {
   fetchProfile: () => Promise<IUser | null>;
   updateProfile: (patch: UpdateProfileDto) => Promise<IUser>;
   logout: () => Promise<void>;
+  deleteAccountAndData: () => Promise<void>;
+  purgeAllLocalData: () => Promise<void>;
   setUser: (user: IUser) => void;
 }
 
@@ -170,6 +177,97 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       error: null,
     });
     useReminderStore.setState({ reminders: [], isLoading: false, error: null });
+  },
+
+  deleteAccountAndData: async () => {
+    set({ isLoading: true });
+    try {
+      try {
+        await api.delete('/auth/me');
+      } catch (err: any) {
+        // If 401 or 404, user is already deleted or token expired; proceed with local wipe
+        if (err?.statusCode !== 401 && err?.statusCode !== 404) {
+          throw err;
+        }
+      }
+
+      await get().purgeAllLocalData();
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  purgeAllLocalData: async () => {
+    // 1. Cancel all scheduled notification alarms on device
+    try {
+      await cancelAllNotifications();
+    } catch (e) {
+      console.warn('[authStore] Failed to cancel notifications:', e);
+    }
+
+    // 2. Clear SecureStore auth tokens
+    try {
+      await clearTokens();
+    } catch (e) {
+      console.warn('[authStore] Failed to clear tokens:', e);
+    }
+
+    // 3. Clear ALL local persistent storage (cache, offline uploads, preferences, sleep)
+    try {
+      await AsyncStorage.clear();
+    } catch (e) {
+      console.warn('[authStore] Failed to clear AsyncStorage:', e);
+    }
+
+    // 4. Clear React Query memory cache
+    try {
+      queryClient.clear();
+    } catch (e) {
+      console.warn('[authStore] Failed to clear queryClient:', e);
+    }
+
+    // 5. Reset all Zustand application stores to clean state
+    set({ user: null, isAuthenticated: false, isLoading: false });
+    useConfigStore.setState({ config: null, lastFetchedAt: null, isLoading: false });
+    useDaySessionStore.setState({ todaySession: null, isLoading: false });
+    useQuickLogStore.setState({ todayTaps: {}, undoEntry: null, undoTimer: null });
+    useActivityStore.setState({
+      activeSession: null,
+      isTracking: false,
+      isPaused: false,
+      activeSeconds: 0,
+      distanceMeters: 0,
+      steps: 0,
+      currentSpeedKmh: 0,
+      averagePaceMinPerKm: 0,
+      routePoints: [],
+      history: [],
+      todaySummary: null,
+      isLoading: false,
+      error: null,
+    });
+    useReminderStore.setState({ reminders: [], isLoading: false, error: null });
+    useSleepTrackerStore.setState({
+      isSleeping: false,
+      activeSleepStart: null,
+      lastSleepRecord: null,
+      targetGoalMinutes: 480,
+      minRecoveryMinutes: 420,
+      isLoaded: false,
+    });
+    useSecurityStore.setState({
+      isAppLockEnabled: false,
+      isLocked: false,
+      isAuthenticating: false,
+    });
+    useWeatherStore.setState({
+      weather: null,
+      assessment: null,
+      activeFlareAlert: null,
+      isLoading: false,
+      isRefreshing: false,
+      error: null,
+    });
   },
 
   setUser: (user) => {

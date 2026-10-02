@@ -56,10 +56,9 @@ describe('apiRequest', () => {
   });
 
   it('throws ApiError on non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ success: false, message: 'Not found' }, 404));
+    mockFetch.mockResolvedValue(jsonResponse({ success: false, message: 'Not found' }, 404));
     await expect(apiRequest('/missing')).rejects.toThrow(ApiError);
     await expect(apiRequest('/missing2')).rejects.toMatchObject({ statusCode: 404 });
-    // Only the first call throws; re-call for the second assertion
   });
 
   it('refreshes token on 401 and retries the request', async () => {

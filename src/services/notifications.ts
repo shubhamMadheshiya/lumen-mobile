@@ -571,6 +571,21 @@ export async function cancelReminder(reminderId: string): Promise<void> {
 }
 
 /**
+ * Cancels all scheduled native notifications across all reminders and clears the mapping.
+ * Used during account deletion and full data reset.
+ */
+export async function cancelAllNotifications(): Promise<void> {
+  try {
+    if (N && typeof N.cancelAllScheduledNotificationsAsync === 'function') {
+      await N.cancelAllScheduledNotificationsAsync().catch(() => {});
+    }
+    await AsyncStorage.removeItem(MAPPING_KEY).catch(() => {});
+  } catch (err) {
+    console.warn('[Notifications] Failed to cancel all notifications:', err);
+  }
+}
+
+/**
  * Handle notification action button interactions.
  */
 export async function handleNotificationActionResponse(response: any): Promise<void> {

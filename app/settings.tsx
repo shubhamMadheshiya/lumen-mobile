@@ -121,9 +121,20 @@ const APP_LOCK_KEY = 'lumen:security:app_lock';
 
 export default function SettingsScreen() {
   const { palette, preference, setPreference } = useTheme();
-  const { user, updateProfile, logout, fetchProfile, isLoading } = useAuthStore();
+  const {
+    user,
+    updateProfile,
+    logout,
+    fetchProfile,
+    isLoading,
+    deleteAccountAndData,
+    purgeAllLocalData,
+  } = useAuthStore();
 
   const styles = useMemo(() => makeStyles(palette), [palette]);
+
+  // Account Deletion State
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Profile Edit Modal state
   const [editNameVisible, setEditNameVisible] = useState(false);
@@ -342,26 +353,49 @@ export default function SettingsScreen() {
     );
   };
 
-  // Delete Account Handler
+  // Delete Account & All Data Handler
+  const executeAccountDeletion = async () => {
+    setIsDeletingAccount(true);
+    try {
+      await deleteAccountAndData();
+      router.replace('/(auth)/login');
+    } catch (err: any) {
+      setIsDeletingAccount(false);
+      const isNetwork = !err?.statusCode || err?.statusCode >= 500;
+      Alert.alert(
+        'Deletion Incomplete',
+        isNetwork
+          ? 'Unable to reach the server to delete remote data. Would you like to wipe all local health data and log out on this device now?'
+          : (err?.message || 'Could not delete your account. Please check your connection and try again.'),
+        isNetwork
+          ? [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Wipe Device Data',
+                style: 'destructive',
+                onPress: async () => {
+                  setIsDeletingAccount(true);
+                  await purgeAllLocalData();
+                  router.replace('/(auth)/login');
+                },
+              },
+            ]
+          : [{ text: 'OK', style: 'default' }]
+      );
+    }
+  };
+
   const handleDeleteAccount = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
       'Delete Account & All Data?',
-      'This will permanently delete your entire health history, day sessions, custom trackers, and user account. This action CANNOT be reversed.',
+      'This will permanently delete your user account, entire health history, day sessions, walking routes, medications, custom trackers, and scheduled reminders. This action CANNOT be reversed.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete Permanently',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete('/auth/me');
-              await logout();
-              router.replace('/(auth)/login');
-            } catch {
-              Alert.alert('Error', 'Could not delete your account. Please try again.');
-            }
-          },
+          onPress: executeAccountDeletion,
         },
       ],
     );
@@ -857,11 +891,18 @@ export default function SettingsScreen() {
         <View style={[styles.card, styles.dangerCard]}>
           <TouchableOpacity
             onPress={handleDeleteAccount}
+            disabled={isDeletingAccount}
             {...buttonProps('Delete account and all data')}
           >
             <View style={styles.dangerRow}>
-              <Trash2 size={18} color={palette.error} />
-              <Text style={styles.dangerText}>Delete Account & All Data</Text>
+              {isDeletingAccount ? (
+                <ActivityIndicator size="small" color={palette.error} style={{ marginRight: 6 }} />
+              ) : (
+                <Trash2 size={18} color={palette.error} />
+              )}
+              <Text style={styles.dangerText}>
+                {isDeletingAccount ? 'Deleting Account & Data...' : 'Delete Account & All Data'}
+              </Text>
             </View>
             <Text style={styles.dangerSub}>
               Permanently delete all logged symptoms, walking routes, medications, and your account. This action cannot be reversed.
@@ -975,6 +1016,27 @@ export default function SettingsScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Fullscreen Deletion Progress Modal */}
+      <Modal
+        visible={isDeletingAccount}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <View style={styles.loadingIconCircle}>
+              <Trash2 size={28} color={palette.error} />
+            </View>
+            <ActivityIndicator size="large" color={palette.error} style={{ marginVertical: 14 }} />
+            <Text style={styles.loadingTitle}>Deleting Account & All Data</Text>
+            <Text style={styles.loadingDesc}>
+              Permanently purging your health logs, activity sessions, scheduled reminders, and server profile. Please do not close the app.
+            </Text>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -1462,6 +1524,52 @@ function makeStyles(palette: ThemeTokens) {
       color: '#10B981',
       fontWeight: '700',
       fontSize: 11,
+    },
+    loadingOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.75)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    loadingCard: {
+      width: '100%',
+      maxWidth: 340,
+      backgroundColor: palette.surface,
+      borderRadius: 24,
+      padding: 28,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: palette.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    loadingIconCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: palette.error + '18',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    loadingTitle: {
+      ...typography.h3,
+      fontSize: 18,
+      fontWeight: '700',
+      color: palette.text,
+      textAlign: 'center',
+      marginTop: 6,
+      marginBottom: 8,
+    },
+    loadingDesc: {
+      ...typography.body,
+      fontSize: 13,
+      lineHeight: 19,
+      color: palette.textSecondary,
+      textAlign: 'center',
     },
   });
 }

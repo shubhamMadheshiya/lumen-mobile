@@ -22,6 +22,7 @@ interface Props {
   options: IOption[];
   quickActions?: IQuickAction[];
   loading: boolean;
+  onEditEntry?: (id: string) => void;
   onDeleteEntry?: (id: string) => void;
 }
 
@@ -46,6 +47,7 @@ export function DayView({
   options,
   quickActions = [],
   loading,
+  onEditEntry,
   onDeleteEntry,
 }: Props) {
   const { palette } = useTheme();
@@ -145,6 +147,7 @@ export function DayView({
                   options={opts}
                   quickAction={qa}
                   onDelete={onDeleteEntry}
+                  onEdit={onEditEntry}
                 />
               );
             })}

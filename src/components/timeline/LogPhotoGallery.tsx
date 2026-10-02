@@ -1,0 +1,307 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  Dimensions,
+  ScrollView,
+} from 'react-native';
+import { Eye, EyeOff, X, Image as ImageIcon, ZoomIn } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { useTheme } from '../../theme/ThemeContext';
+import { typography } from '../../theme/typography';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+interface Props {
+  uris?: string[] | string;
+  isSensitive?: boolean;
+  fieldLabel?: string;
+}
+
+export function LogPhotoGallery({
+  uris,
+  isSensitive = false,
+  fieldLabel = 'Photo',
+}: Props) {
+  const { palette, colorScheme } = useTheme();
+  const isDark = colorScheme === 'dark';
+
+  const [revealed, setRevealed] = useState(!isSensitive);
+  const [activePhoto, setActivePhoto] = useState<string | null>(null);
+
+  const photoList: string[] = Array.isArray(uris)
+    ? uris.filter(Boolean)
+    : typeof uris === 'string' && uris.trim().length > 0
+    ? [uris.trim()]
+    : [];
+
+  if (photoList.length === 0) return null;
+
+  const handleToggleReveal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRevealed((prev) => !prev);
+  };
+
+  const handleOpenViewer = (uri: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setActivePhoto(uri);
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Header bar */}
+      <View style={styles.headerRow}>
+        <View style={styles.labelRow}>
+          <ImageIcon size={13} color={palette.primary} />
+          <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>
+            {fieldLabel} ({photoList.length})
+          </Text>
+        </View>
+
+        {isSensitive && (
+          <TouchableOpacity
+            style={[
+              styles.revealToggleBtn,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : 'rgba(0, 0, 0, 0.05)',
+              },
+            ]}
+            onPress={handleToggleReveal}
+            accessibilityRole="button"
+            accessibilityLabel={revealed ? 'Hide sensitive photo' : 'Reveal photo'}
+          >
+            {revealed ? (
+              <>
+                <EyeOff size={12} color={palette.textSecondary} />
+                <Text style={[styles.revealText, { color: palette.textSecondary }]}>
+                  Hide
+                </Text>
+              </>
+            ) : (
+              <>
+                <Eye size={12} color={palette.primary} />
+                <Text style={[styles.revealText, { color: palette.primary }]}>
+                  Reveal
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Thumbnail Strip */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.thumbnailScroll}
+      >
+        {photoList.map((uri, index) => {
+          return (
+            <View key={`thumb-${index}`} style={styles.thumbWrapper}>
+              <TouchableOpacity
+                style={[
+                  styles.thumbCard,
+                  {
+                    borderColor: isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : 'rgba(0, 0, 0, 0.08)',
+                    backgroundColor: isDark ? '#1C1917' : '#F5F0EB',
+                  },
+                ]}
+                onPress={() => {
+                  if (!revealed) {
+                    setRevealed(true);
+                  } else {
+                    handleOpenViewer(uri);
+                  }
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`View photo ${index + 1}`}
+              >
+                {/* Image */}
+                <Image
+                  source={{ uri }}
+                  style={[styles.thumbnail, !revealed && styles.blurredImage]}
+                  blurRadius={!revealed ? 24 : 0}
+                  resizeMode="cover"
+                />
+
+                {/* Privacy overlay if hidden */}
+                {!revealed && (
+                  <View style={styles.privacyOverlay}>
+                    <Eye size={20} color="#FFFFFF" strokeWidth={2.2} />
+                    <Text style={styles.privacyText}>Tap to reveal</Text>
+                  </View>
+                )}
+
+                {/* Zoom badge when revealed */}
+                {revealed && (
+                  <View style={styles.zoomBadge}>
+                    <ZoomIn size={12} color="#FFFFFF" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      {/* Fullscreen Lightbox Modal */}
+      <Modal
+        visible={!!activePhoto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActivePhoto(null)}
+      >
+        <View style={styles.lightboxOverlay}>
+          {/* Header controls */}
+          <View style={styles.lightboxHeader}>
+            <Text style={styles.lightboxTitle}>{fieldLabel}</Text>
+            <TouchableOpacity
+              style={styles.lightboxCloseBtn}
+              onPress={() => setActivePhoto(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close photo viewer"
+            >
+              <X size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Fullscreen image */}
+          {!!activePhoto && (
+            <Image
+              source={{ uri: activePhoto }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    marginVertical: 6,
+    width: '100%',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  fieldLabel: {
+    ...typography.caption,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  revealToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  revealText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  thumbnailScroll: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 2,
+  },
+  thumbWrapper: {
+    position: 'relative',
+  },
+  thumbCard: {
+    width: 90,
+    height: 90,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  blurredImage: {
+    opacity: 0.6,
+  },
+  privacyOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
+  },
+  privacyText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  zoomBadge: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    padding: 4,
+    borderRadius: 6,
+  },
+  lightboxOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxHeader: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  lightboxTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  lightboxCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.75,
+  },
+});

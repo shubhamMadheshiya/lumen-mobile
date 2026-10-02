@@ -1,15 +1,21 @@
 /**
  * TimelineItem — renders a single LogEntry in the day timeline.
- * Shows category colour strip, time, option chips and key field values.
- * Full support for Quick Action taps (icon, label, values) and deletion.
+ * Features:
+ * - Direct visual anatomical Body Map preview with highlighted swelling/pain locations
+ * - High-res Photo Gallery with privacy blur and fullscreen zoom
+ * - Bristol stool type and severity scale visual formatting
+ * - Dedicated Edit action and Delete action
+ * - Expandable details toggle
  */
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
-import { Trash2 } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { Trash2, Pencil, ChevronDown, ChevronUp, Clock, FileText } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction } from '@lumen/shared';
+import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction, FieldValue } from '@lumen/shared';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
+import { BodyMapPreview } from './BodyMapPreview';
+import { LogPhotoGallery } from './LogPhotoGallery';
 
 interface Props {
   entry: ILogEntry;
@@ -18,6 +24,7 @@ interface Props {
   options: IOption[];
   quickAction?: IQuickAction;
   onPress?: () => void;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -37,45 +44,78 @@ function formatTime(iso: string): string {
   return `${h % 12 || 12}:${m} ${ampm}`;
 }
 
-function renderFieldValue(value: unknown, dataType: string, unit?: string): string {
-  if (value == null) return '';
-  switch (dataType) {
-    case 'boolean': return value ? 'Yes' : 'No';
-    case 'duration': {
-      const secs = Number(value);
-      const h = Math.floor(secs / 3600);
-      const m = Math.floor((secs % 3600) / 60);
-      return h > 0 ? `${h}h ${m}m` : `${m}m`;
-    }
-    case 'temperature': return `${Number(value).toFixed(1)} °C`;
-    case 'range': return `${value}/10`;
-    case 'image': return `📷 Photo`;
-    case 'location': return `🧍 Body map`;
-    default: return unit ? `${value} ${unit}` : String(value);
-  }
+function formatStoolType(val: unknown): string | null {
+  const num = Number(val);
+  if (isNaN(num) || num < 1 || num > 7) return null;
+  const desc: Record<number, string> = {
+    1: 'Type 1 (Hard lumps)',
+    2: 'Type 2 (Lumpy sausage)',
+    3: 'Type 3 (Sausage with cracks)',
+    4: 'Type 4 (Smooth & soft)',
+    5: 'Type 5 (Soft blobs)',
+    6: 'Type 6 (Mushy / fluffy)',
+    7: 'Type 7 (Liquid / watery)',
+  };
+  return desc[num] || `Type ${num}`;
 }
 
-export function TimelineItem({ entry, category, question, options, quickAction, onPress, onDelete }: Props) {
-  const { palette } = useTheme();
+function formatSeverity(val: unknown): { label: string; color: string } {
+  const num = Number(val);
+  if (isNaN(num)) return { label: `${val}/10`, color: '#F59E0B' };
+  if (num <= 3) return { label: `${num}/10 Mild`, color: '#10B981' };
+  if (num <= 6) return { label: `${num}/10 Moderate`, color: '#F59E0B' };
+  return { label: `${num}/10 Severe`, color: '#EF4444' };
+}
+
+export function TimelineItem({
+  entry,
+  category,
+  question,
+  options,
+  quickAction,
+  onPress,
+  onEdit,
+  onDelete,
+}: Props) {
+  const { palette, colorScheme } = useTheme();
   const styles = useStyles();
+  const isDark = colorScheme === 'dark';
   const [expanded, setExpanded] = useState(false);
 
   const isQuickAction = entry.source === 'quick_action' || !!entry.quickActionId;
   const title = isQuickAction
-    ? (quickAction?.label ?? 'Quick Tap')
-    : (category?.name ?? 'Log');
+    ? quickAction?.label ?? 'Quick Tap'
+    : category?.name ?? 'Log';
   const icon = isQuickAction
-    ? (quickAction?.icon ?? '⚡')
-    : (category?.icon ?? null);
+    ? quickAction?.icon ?? '⚡'
+    : category?.icon ?? null;
   const accentColor = isQuickAction
-    ? (quickAction?.color ?? palette.primary)
-    : (category?.color ?? palette.primary);
+    ? quickAction?.color ?? palette.primary
+    : category?.color ?? palette.primary;
 
-  const quickValueText = quickAction?.defaultValue != null
-    ? `+${quickAction.defaultValue}${quickAction.unit ? ' ' + quickAction.unit : ''}`
-    : null;
+  const quickValueText =
+    quickAction?.defaultValue != null
+      ? `+${quickAction.defaultValue}${quickAction.unit ? ' ' + quickAction.unit : ''}`
+      : null;
+
+  // Extract all media and location fields across all answers
+  const allFieldValues: { answerLabel: string; field: FieldValue }[] = [];
+  entry.answers.forEach((ans) => {
+    const opt = options.find((o) => o._id === ans.optionId);
+    const label = ans.optionLabelSnapshot ?? opt?.label ?? 'Item';
+    ans.values?.forEach((f) => {
+      allFieldValues.push({ answerLabel: label, field: f });
+    });
+  });
+
+  const locationFields = allFieldValues.filter((f) => f.field.dataType === 'location');
+  const imageFields = allFieldValues.filter((f) => f.field.dataType === 'image');
+  const standardFields = allFieldValues.filter(
+    (f) => f.field.dataType !== 'location' && f.field.dataType !== 'image'
+  );
 
   const handleDelete = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
       'Delete Log Entry',
       `Are you sure you want to remove this "${title}" log?`,
@@ -93,135 +133,415 @@ export function TimelineItem({ entry, category, question, options, quickAction, 
     );
   };
 
+  const handleEdit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onEdit?.(entry._id);
+  };
+
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => { setExpanded(e => !e); onPress?.(); }}
-      activeOpacity={0.88}
-      accessibilityRole="button"
-      accessibilityLabel={`${title} at ${formatTime(entry.occurredAt)}`}
-    >
-      {/* Colour strip */}
+    <View style={styles.card}>
+      {/* Category accent colour strip */}
       <View style={[styles.strip, { backgroundColor: accentColor }]} />
 
       <View style={styles.body}>
-        {/* Top row */}
+        {/* Top Header Row */}
         <View style={styles.topRow}>
           <View style={styles.titleRow}>
             {icon ? <Text style={styles.catIcon}>{icon}</Text> : null}
-            <Text style={styles.catName} numberOfLines={1}>{title}</Text>
-            {question && <Text style={styles.qTitle} numberOfLines={1}>{question.title}</Text>}
-          </View>
-          <View style={styles.meta}>
-            <Text style={styles.time}>{formatTime(entry.occurredAt)}</Text>
-            <View style={styles.badgeRow}>
-              <Text style={[styles.sourceBadge, { borderColor: accentColor + '55', color: accentColor, backgroundColor: accentColor + '0D' }]}>
-                {SOURCE_LABEL[entry.source] ?? entry.source}
+            <Text style={styles.catName} numberOfLines={1}>
+              {title}
+            </Text>
+            {question && (
+              <Text style={styles.qTitle} numberOfLines={1}>
+                {question.title}
               </Text>
-              {onDelete && (
-                <TouchableOpacity
-                  onPress={handleDelete}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.trashBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Delete entry"
-                >
-                  <Trash2 size={13} color={palette.textDisabled} />
-                </TouchableOpacity>
-              )}
-            </View>
+            )}
+          </View>
+
+          <View style={styles.metaRow}>
+            <Text style={styles.time}>{formatTime(entry.occurredAt)}</Text>
+            <Text
+              style={[
+                styles.sourceBadge,
+                {
+                  borderColor: accentColor + '44',
+                  color: accentColor,
+                  backgroundColor: accentColor + '12',
+                },
+              ]}
+            >
+              {SOURCE_LABEL[entry.source] ?? entry.source}
+            </Text>
           </View>
         </View>
 
         {/* Quick action value pill */}
         {isQuickAction && quickValueText && (
           <View style={styles.chips}>
-            <View style={[styles.chip, { borderColor: accentColor + '55', backgroundColor: accentColor + '14' }]}>
-              <Text style={[styles.chipText, { color: accentColor, fontWeight: '700' }]}>{quickValueText}</Text>
+            <View
+              style={[
+                styles.chip,
+                { borderColor: accentColor + '55', backgroundColor: accentColor + '14' },
+              ]}
+            >
+              <Text style={[styles.chipText, { color: accentColor, fontWeight: '700' }]}>
+                {quickValueText}
+              </Text>
             </View>
           </View>
         )}
 
-        {/* Option chips for questionnaires */}
+        {/* Option Chips with Key Value Highlights */}
         {entry.answers.length > 0 && (
           <View style={styles.chips}>
-            {entry.answers.slice(0, expanded ? undefined : 3).map((ans, i) => {
-              const opt = options.find(o => o._id === ans.optionId);
-              const label = ans.optionLabelSnapshot ?? opt?.label ?? (ans.optionId === '__other__' ? ans.otherText : '?');
+            {entry.answers.map((ans, i) => {
+              const opt = options.find((o) => o._id === ans.optionId);
+              const label =
+                ans.optionLabelSnapshot ??
+                opt?.label ??
+                (ans.optionId === '__other__' ? ans.otherText : 'Option');
+
+              // Find primary severity or stool type if present
+              const rangeVal = ans.values?.find((v) => v.dataType === 'range');
+              const stoolVal = ans.values?.find(
+                (v) =>
+                  v.fieldKey.toLowerCase().includes('type') ||
+                  v.fieldKey.toLowerCase().includes('bristol') ||
+                  v.fieldKey.toLowerCase().includes('stool')
+              );
+
               return (
-                <View key={i} style={[styles.chip, { borderColor: accentColor + '55', backgroundColor: accentColor + '12' }]}>
+                <View
+                  key={`ans-chip-${i}`}
+                  style={[
+                    styles.chip,
+                    {
+                      borderColor: accentColor + '44',
+                      backgroundColor: accentColor + '10',
+                    },
+                  ]}
+                >
                   {opt?.icon && <Text style={styles.chipIcon}>{opt.icon}</Text>}
-                  <Text style={[styles.chipText, { color: accentColor }]} numberOfLines={1}>{label}</Text>
-                  {/* Key field values inline */}
-                  {ans.values?.slice(0, 1).map((v, vi) => (
-                    <Text key={vi} style={styles.fieldVal}>
-                      {renderFieldValue(v.value, v.dataType, v.unit)}
-                    </Text>
-                  ))}
+                  <Text style={[styles.chipText, { color: palette.text }]}>{label}</Text>
+
+                  {/* Highlighted severity */}
+                  {rangeVal && (
+                    <View
+                      style={[
+                        styles.severityPill,
+                        { backgroundColor: formatSeverity(rangeVal.value).color + '22' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.severityText,
+                          { color: formatSeverity(rangeVal.value).color },
+                        ]}
+                      >
+                        {formatSeverity(rangeVal.value).label}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Highlighted Stool Type */}
+                  {stoolVal && formatStoolType(stoolVal.value) && (
+                    <View style={styles.stoolPill}>
+                      <Text style={[styles.stoolText, { color: palette.primary }]}>
+                        {formatStoolType(stoolVal.value)}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               );
             })}
-            {!expanded && entry.answers.length > 3 && (
-              <Text style={styles.moreText}>+{entry.answers.length - 3} more</Text>
-            )}
           </View>
         )}
 
-        {/* Expanded: show all field values + note */}
-        {expanded && entry.answers.map((ans, i) => (
-          ans.values && ans.values.length > 1 ? (
-            <View key={i} style={styles.fieldList}>
-              {ans.values.slice(1).map((v, vi) => (
-                <Text key={vi} style={styles.fieldDetail}>
-                  {v.fieldKey}: {renderFieldValue(v.value, v.dataType, v.unit)}
-                </Text>
-              ))}
-            </View>
-          ) : null
+        {/* Rich Anatomical Body Map Previews for Swelling / Pain / Symptoms */}
+        {locationFields.map((loc, idx) => (
+          <BodyMapPreview
+            key={`loc-preview-${idx}`}
+            selectedKeys={loc.field.value as string[] | string}
+            fieldLabel={`${loc.answerLabel} • ${loc.field.fieldKey}`}
+          />
         ))}
 
+        {/* Rich Photo Gallery for Stool, Skin, or Attached Images */}
+        {imageFields.map((img, idx) => (
+          <LogPhotoGallery
+            key={`img-gallery-${idx}`}
+            uris={img.field.value as string[] | string}
+            isSensitive={true}
+            fieldLabel={`${img.answerLabel} • Photo`}
+          />
+        ))}
+
+        {/* Standard text/numeric fields (e.g. Duration, Temperature) */}
+        {standardFields.length > 0 && (
+          <View style={styles.standardFieldsList}>
+            {standardFields.map((f, idx) => {
+              let displayVal = String(f.field.value);
+              if (f.field.dataType === 'temperature') {
+                displayVal = `${Number(f.field.value).toFixed(1)} °C`;
+              } else if (f.field.dataType === 'duration') {
+                const s = Number(f.field.value);
+                const h = Math.floor(s / 3600);
+                const m = Math.floor((s % 3600) / 60);
+                displayVal = h > 0 ? `${h}h ${m}m` : `${m}m`;
+              } else if (f.field.unit) {
+                displayVal = `${displayVal} ${f.field.unit}`;
+              }
+
+              return (
+                <View key={`std-${idx}`} style={styles.fieldLine}>
+                  <Text style={[styles.fieldKey, { color: palette.textSecondary }]}>
+                    {f.field.fieldKey}:
+                  </Text>
+                  <Text style={[styles.fieldVal, { color: palette.text }]}>{displayVal}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Notes callout block */}
         {entry.note ? (
-          <Text style={styles.note}>📝 {entry.note}</Text>
+          <View
+            style={[
+              styles.noteBox,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.025)',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)',
+              },
+            ]}
+          >
+            <FileText size={13} color={palette.textSecondary} style={{ marginTop: 2 }} />
+            <Text style={[styles.noteText, { color: palette.textSecondary }]}>
+              {entry.note}
+            </Text>
+          </View>
         ) : null}
+
+        {/* Bottom Actions Bar (Edit & Delete) */}
+        <View style={styles.bottomBar}>
+          <View style={{ flex: 1 }} />
+
+          <View style={styles.actionsGroup}>
+            {/* Edit Button */}
+            {onEdit && (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 125, 77, 0.12)' : 'rgba(255, 107, 53, 0.08)',
+                    borderColor: isDark ? 'rgba(255, 125, 77, 0.25)' : 'rgba(255, 107, 53, 0.2)',
+                  },
+                ]}
+                onPress={handleEdit}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Edit log entry"
+              >
+                <Pencil size={13} color={palette.primary} strokeWidth={2.2} />
+                <Text style={[styles.actionBtnText, { color: palette.primary }]}>Edit</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Delete Button */}
+            {onDelete && (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  styles.deleteButton,
+                  {
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.06)',
+                    borderColor: isDark ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.18)',
+                  },
+                ]}
+                onPress={handleDelete}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Delete log entry"
+              >
+                <Trash2 size={13} color="#EF4444" strokeWidth={2} />
+                <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
-const useStyles = createThemedStyles(palette => ({
+const useStyles = createThemedStyles((palette) => ({
   card: {
     flexDirection: 'row',
     backgroundColor: palette.surface,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: palette.border,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
-  strip: { width: 5 },
-  body: { flex: 1, padding: 12, gap: 6 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, paddingRight: 8 },
-  catIcon: { fontSize: 16 },
-  catName: { ...typography.bodyBold, fontSize: 15, color: palette.text, fontWeight: '700' },
-  qTitle: { ...typography.small, color: palette.textSecondary, flex: 1 },
-  meta: { alignItems: 'flex-end', gap: 4 },
-  time: { ...typography.caption, color: palette.textSecondary, fontSize: 11, fontWeight: '500' },
-  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  sourceBadge: { ...typography.caption, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1.5, fontSize: 10, fontWeight: '600' },
-  trashBtn: { padding: 2 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 2 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4 },
-  chipIcon: { fontSize: 12 },
-  chipText: { ...typography.caption, fontWeight: '600', maxWidth: 120 },
-  fieldVal: { ...typography.caption, color: palette.textSecondary, marginLeft: 2 },
-  moreText: { ...typography.caption, color: palette.textDisabled, alignSelf: 'center' },
-  fieldList: { gap: 2, marginTop: 4, paddingLeft: 4 },
-  fieldDetail: { ...typography.small, color: palette.textSecondary },
-  note: { ...typography.small, color: palette.textSecondary, fontStyle: 'italic', marginTop: 2 },
+  strip: {
+    width: 6,
+  },
+  body: {
+    flex: 1,
+    padding: 14,
+    gap: 8,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    paddingRight: 8,
+  },
+  catIcon: {
+    fontSize: 18,
+  },
+  catName: {
+    ...typography.bodyBold,
+    fontSize: 16,
+    color: palette.text,
+    fontWeight: '700',
+  },
+  qTitle: {
+    ...typography.small,
+    color: palette.textSecondary,
+    flex: 1,
+  },
+  metaRow: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  time: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sourceBadge: {
+    ...typography.caption,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  chipIcon: {
+    fontSize: 13,
+  },
+  chipText: {
+    ...typography.caption,
+    fontWeight: '600',
+  },
+  severityPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    marginLeft: 3,
+  },
+  severityText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  stoolPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    marginLeft: 3,
+  },
+  stoolText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  standardFieldsList: {
+    gap: 3,
+    marginTop: 4,
+    paddingLeft: 4,
+  },
+  fieldLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  fieldKey: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  fieldVal: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noteBox: {
+    flexDirection: 'row',
+    gap: 6,
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 2,
+  },
+  noteText: {
+    ...typography.small,
+    fontSize: 12.5,
+    fontStyle: 'italic',
+    flex: 1,
+    lineHeight: 18,
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  actionsGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  deleteButton: {},
+  actionBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
 }));

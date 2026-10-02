@@ -6,5 +6,5 @@ import { Redirect } from 'expo-router';
  * All reminder management has moved to the unified /reminders hub.
  */
 export default function CustomizeRemindersRedirect() {
-  return <Redirect href="/reminders" />;
+  return <Redirect href="/reminders?mode=reminders" />;
 }

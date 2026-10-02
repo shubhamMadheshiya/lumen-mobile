@@ -83,7 +83,7 @@ export default function TodayScreen() {
   const [weatherModalVisible, setWeatherModalVisible] = useState(false);
 
   const loadData = useCallback(async () => {
-    await Promise.all([
+    await Promise.allSettled([
       fetchProfile(),
       fetchConfig(),
       fetchTodaySession(),
@@ -102,7 +102,7 @@ export default function TodayScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
+    await Promise.allSettled([
       loadData(),
       fetchWeather({ force: true, isUserRefresh: true }),
     ]);
@@ -218,7 +218,7 @@ export default function TodayScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Active Reminders</Text>
-            <TouchableOpacity onPress={() => router.push('/reminders')}>
+            <TouchableOpacity onPress={() => router.push('/reminders?mode=reminders')}>
               <Text style={styles.sectionActionText}>Manage ({reminders.filter(r => r.enabled).length})</Text>
             </TouchableOpacity>
           </View>
@@ -237,7 +237,7 @@ export default function TodayScreen() {
                 <TouchableOpacity
                   key={rem._id}
                   style={[styles.reminderRow, idx < activeReminders.length - 1 && styles.reminderRowBorder]}
-                  onPress={() => router.push('/reminders')}
+                  onPress={() => router.push('/reminders?mode=reminders')}
                 >
                   <Text style={styles.reminderEmoji}>{rem.icon || '⏰'}</Text>
                   <View style={styles.reminderInfo}>
@@ -350,7 +350,7 @@ export default function TodayScreen() {
                 label="Reminders"
                 subtitle={reminders.length > 0 ? `${reminders.length} total` : 'None set'}
                 color={palette.catMood}
-                onPress={() => router.push('/reminders')}
+                onPress={() => router.push('/reminders?mode=reminders')}
               />
             )}
 

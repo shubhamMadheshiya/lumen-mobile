@@ -47,18 +47,18 @@ function AppBootstrap() {
   const [showInitialPrimer, setShowInitialPrimer] = useState(false);
 
   useEffect(() => {
-    initAuth();
+    initAuth().catch(err => console.warn('[AppBootstrap] initAuth error:', err));
     permissionService.hasSeenInitialPrimer().then((hasSeen) => {
       if (!hasSeen) {
         setShowInitialPrimer(true);
       }
-    });
+    }).catch(err => console.warn('[AppBootstrap] hasSeenInitialPrimer error:', err));
   }, [initAuth]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchConfig();
-      flushQueue();
+      fetchConfig().catch(err => console.warn('[AppBootstrap] fetchConfig error:', err));
+      flushQueue().catch(err => console.warn('[AppBootstrap] flushQueue error:', err));
     }
   }, [isAuthenticated, fetchConfig]);
 

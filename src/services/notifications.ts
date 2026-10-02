@@ -71,36 +71,44 @@ export const NOTIF_ACTIONS = {
 export async function setupNotificationCategories(): Promise<void> {
   if (!N || typeof N.setNotificationCategoryAsync !== 'function') return;
 
+  const createCategorySafe = async (id: string, actions: any[]) => {
+    try {
+      await N.setNotificationCategoryAsync(id, actions);
+    } catch (e) {
+      console.warn(`[Notifications] Failed to register category ${id}:`, e);
+    }
+  };
+
   try {
-    await Promise.all([
-      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.FLARE, [
-        { identifier: NOTIF_ACTIONS.VIEW_FLARE, buttonTitle: '🌡️ View Report', options: { opensAppToForeground: true } },
-        { identifier: NOTIF_ACTIONS.LOG_SYMPTOM, buttonTitle: '🩹 Log Symptom', options: { opensAppToForeground: true } },
+    await Promise.allSettled([
+      createCategorySafe(NOTIF_CATEGORIES.FLARE, [
+        { identifier: NOTIF_ACTIONS.VIEW_FLARE, buttonTitle: 'View Report', options: { opensAppToForeground: true } },
+        { identifier: NOTIF_ACTIONS.LOG_SYMPTOM, buttonTitle: 'Log Symptom', options: { opensAppToForeground: true } },
       ]),
-      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.PACING, [
-        { identifier: NOTIF_ACTIONS.RESTING_NOW, buttonTitle: '🛋️ Resting Now', options: { opensAppToForeground: false } },
-        { identifier: NOTIF_ACTIONS.VIEW_WALK, buttonTitle: '🚶 View Walk', options: { opensAppToForeground: true } },
+      createCategorySafe(NOTIF_CATEGORIES.PACING, [
+        { identifier: NOTIF_ACTIONS.RESTING_NOW, buttonTitle: 'Resting Now', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.VIEW_WALK, buttonTitle: 'View Walk', options: { opensAppToForeground: true } },
       ]),
-      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.MEDS, [
-        { identifier: NOTIF_ACTIONS.MARK_MED_TAKEN, buttonTitle: '✅ Mark Taken', options: { opensAppToForeground: false } },
-        { identifier: NOTIF_ACTIONS.SNOOZE_15, buttonTitle: '⏱ Snooze 15m', options: { opensAppToForeground: false } },
+      createCategorySafe(NOTIF_CATEGORIES.MEDS, [
+        { identifier: NOTIF_ACTIONS.MARK_MED_TAKEN, buttonTitle: 'Mark Taken', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_15, buttonTitle: 'Snooze 15m', options: { opensAppToForeground: false } },
       ]),
-      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.WATER, [
-        { identifier: NOTIF_ACTIONS.LOG_250ML, buttonTitle: '💧 +250 ml', options: { opensAppToForeground: false } },
-        { identifier: NOTIF_ACTIONS.LOG_500ML, buttonTitle: '💧 +500 ml', options: { opensAppToForeground: false } },
-        { identifier: NOTIF_ACTIONS.SNOOZE_30, buttonTitle: '⏱ Snooze 30m', options: { opensAppToForeground: false } },
+      createCategorySafe(NOTIF_CATEGORIES.WATER, [
+        { identifier: NOTIF_ACTIONS.LOG_250ML, buttonTitle: '+250 ml', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.LOG_500ML, buttonTitle: '+500 ml', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_30, buttonTitle: 'Snooze 30m', options: { opensAppToForeground: false } },
       ]),
-      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.WALK, [
-        { identifier: NOTIF_ACTIONS.START_WALK, buttonTitle: '🚶 Start Walking', options: { opensAppToForeground: true } },
-        { identifier: NOTIF_ACTIONS.SNOOZE_15, buttonTitle: '⏱ Snooze 15m', options: { opensAppToForeground: false } },
+      createCategorySafe(NOTIF_CATEGORIES.WALK, [
+        { identifier: NOTIF_ACTIONS.START_WALK, buttonTitle: 'Start Walking', options: { opensAppToForeground: true } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_15, buttonTitle: 'Snooze 15m', options: { opensAppToForeground: false } },
       ]),
-      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.STAND, [
-        { identifier: NOTIF_ACTIONS.IM_MOVING, buttonTitle: '🧍 I’m Moving', options: { opensAppToForeground: false } },
-        { identifier: NOTIF_ACTIONS.SNOOZE_10, buttonTitle: '⏱ Snooze 10m', options: { opensAppToForeground: false } },
+      createCategorySafe(NOTIF_CATEGORIES.STAND, [
+        { identifier: NOTIF_ACTIONS.IM_MOVING, buttonTitle: "I'm Moving", options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_10, buttonTitle: 'Snooze 10m', options: { opensAppToForeground: false } },
       ]),
-      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.SLEEP, [
-        { identifier: NOTIF_ACTIONS.START_SLEEP, buttonTitle: '😴 Start Sleep', options: { opensAppToForeground: true } },
-        { identifier: NOTIF_ACTIONS.SNOOZE_30, buttonTitle: '⏱ Wind-down +30m', options: { opensAppToForeground: false } },
+      createCategorySafe(NOTIF_CATEGORIES.SLEEP, [
+        { identifier: NOTIF_ACTIONS.START_SLEEP, buttonTitle: 'Start Sleep', options: { opensAppToForeground: true } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_30, buttonTitle: 'Wind-down +30m', options: { opensAppToForeground: false } },
       ]),
     ]);
   } catch (err) {
@@ -110,16 +118,26 @@ export async function setupNotificationCategories(): Promise<void> {
 
 /**
  * Ensure dedicated Android notification channels exist:
- * 1. Clinical & Flare Alerts (MAX priority, bypass DND, alert chimes)
+ * 1. Clinical & Flare Alerts (MAX priority, high-visibility chime, vibration)
  * 2. Daily Habits & Reminders (HIGH priority)
  * 3. Spoon Theory & Activity Pacing (HIGH priority)
+ * 4. General Reminders (legacy backwards-compatible fallback)
  */
 export async function ensureNotificationChannel(): Promise<void> {
   if (!N || Platform.OS !== 'android' || typeof N.setNotificationChannelAsync !== 'function') return;
+
+  const createChannelSafe = async (id: string, config: any) => {
+    try {
+      await N.setNotificationChannelAsync(id, config);
+    } catch (e) {
+      console.warn(`[Notifications] Failed to create channel ${id}:`, e);
+    }
+  };
+
   try {
-    await Promise.all([
-      // 1. Clinical Channel
-      N.setNotificationChannelAsync(CHANNEL_ID_CLINICAL, {
+    await Promise.allSettled([
+      // 1. Clinical Channel (MAX importance, high alert chime & vibration)
+      createChannelSafe(CHANNEL_ID_CLINICAL, {
         name: 'Clinical & Flare Alerts',
         description: 'Critical atmospheric pressure drops, extreme UV warnings, and urgent medication timing',
         importance: N.AndroidImportance.MAX,
@@ -128,10 +146,9 @@ export async function ensureNotificationChannel(): Promise<void> {
         enableLights: true,
         enableVibrate: true,
         lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
       }),
       // 2. Habits & Reminders Channel
-      N.setNotificationChannelAsync(CHANNEL_ID_HABITS, {
+      createChannelSafe(CHANNEL_ID_HABITS, {
         name: 'Habits & Health Reminders',
         description: 'Scheduled reminders for hydration, movement, and sleep session tracking',
         importance: N.AndroidImportance.HIGH,
@@ -142,7 +159,7 @@ export async function ensureNotificationChannel(): Promise<void> {
         lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
       }),
       // 3. Activity Pacing Channel
-      N.setNotificationChannelAsync(CHANNEL_ID_PACING, {
+      createChannelSafe(CHANNEL_ID_PACING, {
         name: 'Activity Pacing & Spoon Theory',
         description: 'Milestones and post-exertional malaise fatigue prevention advice',
         importance: N.AndroidImportance.HIGH,
@@ -151,6 +168,14 @@ export async function ensureNotificationChannel(): Promise<void> {
         enableLights: true,
         enableVibrate: true,
         lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+      }),
+      // 4. Legacy channel alias for backwards compatibility
+      createChannelSafe('lumen_reminders_v1', {
+        name: 'General Reminders',
+        description: 'Lumen daily reminders and health alerts',
+        importance: N.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        sound: 'default',
       }),
     ]);
   } catch (err) {

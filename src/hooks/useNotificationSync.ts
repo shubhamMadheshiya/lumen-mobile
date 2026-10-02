@@ -23,11 +23,21 @@ export function useNotificationSync() {
   const { reminders, fetchReminders } = useReminderStore();
 
   useEffect(() => {
+    let isMounted = true;
     (async () => {
-      await ensureNotificationChannel();
-      await setupNotificationCategories();
-      await fetchReminders();
+      try {
+        await ensureNotificationChannel();
+        await setupNotificationCategories();
+        if (isMounted) {
+          await fetchReminders().catch(() => {});
+        }
+      } catch (err) {
+        console.warn('[useNotificationSync] Startup sync error:', err);
+      }
     })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {

@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { safeGoBack } from '../../src/utils/navigation';
 import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft, RotateCcw, BellRing, Edit2, AlertTriangle, CloudSun, X, Footprints, ShieldAlert } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -54,9 +54,25 @@ export default function RemindersScreen() {
   const { activeFlareAlert, dismissFlareAlert } = useWeatherStore();
   const { activePacingAlert, dismissPacingAlert } = useActivityStore();
 
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isRemindersOnly = mode === 'reminders';
+
   const [selectedCategory, setSelectedCategory] = useState<ReminderTabValue>('ALL');
   const [refreshing, setRefreshing] = useState(false);
   const [weatherModalVisible, setWeatherModalVisible] = useState(false);
+
+  const availableTabs = React.useMemo(() => {
+    if (isRemindersOnly) {
+      return CATEGORY_TABS.filter(t => t.value !== 'ALERTS');
+    }
+    return CATEGORY_TABS;
+  }, [isRemindersOnly]);
+
+  useEffect(() => {
+    if (isRemindersOnly && selectedCategory === 'ALERTS') {
+      setSelectedCategory('ALL');
+    }
+  }, [isRemindersOnly, selectedCategory]);
 
   useEffect(() => {
     fetchReminders();
@@ -203,7 +219,7 @@ export default function RemindersScreen() {
         >
           <ChevronLeft size={24} color={palette.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Alerts & Reminders</Text>
+        <Text style={styles.headerTitle}>{isRemindersOnly ? 'Reminders' : 'Alerts & Reminders'}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.testBtn}
@@ -229,7 +245,7 @@ export default function RemindersScreen() {
       {/* Category Filter Tabs */}
       <View style={styles.filterRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {CATEGORY_TABS.map(tab => {
+          {availableTabs.map(tab => {
             const isActive = selectedCategory === tab.value;
             return (
               <TouchableOpacity
@@ -253,7 +269,7 @@ export default function RemindersScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
       >
         {/* Active Weather Flare Warning Notification */}
-        {activeFlareAlert && !activeFlareAlert.dismissed && (selectedCategory === 'ALL' || selectedCategory === 'ALERTS') && (
+        {!isRemindersOnly && activeFlareAlert && !activeFlareAlert.dismissed && (selectedCategory === 'ALL' || selectedCategory === 'ALERTS') && (
           <View
             style={[
               styles.weatherAlertBanner,
@@ -313,7 +329,7 @@ export default function RemindersScreen() {
         )}
 
         {/* Spoon Theory Activity Pacing Alert */}
-        {activePacingAlert && !activePacingAlert.dismissed && (selectedCategory === 'ALL' || selectedCategory === 'ALERTS') && (
+        {!isRemindersOnly && activePacingAlert && !activePacingAlert.dismissed && (selectedCategory === 'ALL' || selectedCategory === 'ALERTS') && (
           <View
             style={[
               styles.weatherAlertBanner,

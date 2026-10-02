@@ -322,9 +322,10 @@ export default function TimelineScreen() {
           </PressableScale>
         </View>
 
-        {/* Search Bar */}
+        {/* Search & Filter Toolbar */}
         {entries.length > 0 && (
-          <View style={styles.searchSection}>
+          <View style={styles.filterToolbar}>
+            {/* Search Bar */}
             <View style={styles.searchBar}>
               <Search size={16} color={palette.textSecondary} style={{ marginRight: 8 }} />
               <TextInput
@@ -341,113 +342,111 @@ export default function TimelineScreen() {
                 </TouchableOpacity>
               )}
             </View>
-          </View>
-        )}
 
-        {/* Type Filter row (All, Detailed, Quick Taps, Photos, Body Map) */}
-        {entries.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.typeFilterRow}
-          >
-            <TouchableOpacity
-              style={[styles.typeChip, typeFilter === 'all' && styles.typeChipActive]}
-              onPress={() => setTypeFilter('all')}
+            {/* Type Filter row (All, Detailed, Quick Taps, Photos, Body Map) */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.typeFilterRow}
             >
-              <Text style={[styles.typeChipText, typeFilter === 'all' && styles.typeChipTextActive]}>
-                All ({entries.length})
-              </Text>
-            </TouchableOpacity>
-
-            {stats.detailed > 0 && (
               <TouchableOpacity
-                style={[styles.typeChip, typeFilter === 'detailed' && styles.typeChipActive]}
-                onPress={() => setTypeFilter(typeFilter === 'detailed' ? 'all' : 'detailed')}
+                style={[styles.typeChip, typeFilter === 'all' && styles.typeChipActive]}
+                onPress={() => setTypeFilter('all')}
               >
-                <Text style={[styles.typeChipText, typeFilter === 'detailed' && styles.typeChipTextActive]}>
-                  📋 Detailed ({stats.detailed})
+                <Text style={[styles.typeChipText, typeFilter === 'all' && styles.typeChipTextActive]}>
+                  All ({entries.length})
                 </Text>
               </TouchableOpacity>
-            )}
 
-            {stats.quick > 0 && (
-              <TouchableOpacity
-                style={[styles.typeChip, typeFilter === 'quick' && styles.typeChipActive]}
-                onPress={() => setTypeFilter(typeFilter === 'quick' ? 'all' : 'quick')}
-              >
-                <Text style={[styles.typeChipText, typeFilter === 'quick' && styles.typeChipTextActive]}>
-                  ⚡ Quick ({stats.quick})
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {stats.photos > 0 && (
-              <TouchableOpacity
-                style={[styles.typeChip, typeFilter === 'photos' && styles.typeChipActive]}
-                onPress={() => setTypeFilter(typeFilter === 'photos' ? 'all' : 'photos')}
-              >
-                <Camera size={13} color={typeFilter === 'photos' ? palette.primary : palette.textSecondary} style={{ marginRight: 4 }} />
-                <Text style={[styles.typeChipText, typeFilter === 'photos' && styles.typeChipTextActive]}>
-                  Photos ({stats.photos})
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {stats.bodyMap > 0 && (
-              <TouchableOpacity
-                style={[styles.typeChip, typeFilter === 'bodymap' && styles.typeChipActive]}
-                onPress={() => setTypeFilter(typeFilter === 'bodymap' ? 'all' : 'bodymap')}
-              >
-                <Text style={{ fontSize: 13, marginRight: 2 }}>🧍</Text>
-                <Text style={[styles.typeChipText, typeFilter === 'bodymap' && styles.typeChipTextActive]}>
-                  Body Map ({stats.bodyMap})
-                </Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        )}
-
-        {/* Category filter chips with entry count badges */}
-        {usedCats.length > 1 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterRow}
-          >
-            <TouchableOpacity
-              style={[styles.filterChip, filterCatId === null && styles.filterChipActive]}
-              onPress={() => setFilterCatId(null)}
-            >
-              <Text style={[styles.filterText, filterCatId === null && styles.filterTextActive]}>
-                All Categories
-              </Text>
-            </TouchableOpacity>
-
-            {usedCats.map(cat => {
-              const isSelected = filterCatId === cat._id;
-              return (
+              {stats.detailed > 0 && (
                 <TouchableOpacity
-                  key={cat._id}
-                  style={[
-                    styles.filterChip,
-                    isSelected && { borderColor: cat.color, backgroundColor: cat.color + '18' },
-                  ]}
-                  onPress={() => setFilterCatId(isSelected ? null : cat._id)}
+                  style={[styles.typeChip, typeFilter === 'detailed' && styles.typeChipActive]}
+                  onPress={() => setTypeFilter(typeFilter === 'detailed' ? 'all' : 'detailed')}
                 >
-                  {cat.icon && <Text style={styles.filterIcon}>{cat.icon}</Text>}
-                  <Text style={[styles.filterText, isSelected && { color: cat.color, fontWeight: '700' }]}>
-                    {cat.name}
+                  <Text style={[styles.typeChipText, typeFilter === 'detailed' && styles.typeChipTextActive]}>
+                    📋 Detailed ({stats.detailed})
                   </Text>
-                  <View style={[styles.catCountBadge, isSelected && { backgroundColor: cat.color + '28' }]}>
-                    <Text style={[styles.catCountText, isSelected && { color: cat.color }]}>
-                      {cat.count}
-                    </Text>
-                  </View>
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+              )}
+
+              {stats.quick > 0 && (
+                <TouchableOpacity
+                  style={[styles.typeChip, typeFilter === 'quick' && styles.typeChipActive]}
+                  onPress={() => setTypeFilter(typeFilter === 'quick' ? 'all' : 'quick')}
+                >
+                  <Text style={[styles.typeChipText, typeFilter === 'quick' && styles.typeChipTextActive]}>
+                    ⚡ Quick ({stats.quick})
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {stats.photos > 0 && (
+                <TouchableOpacity
+                  style={[styles.typeChip, typeFilter === 'photos' && styles.typeChipActive]}
+                  onPress={() => setTypeFilter(typeFilter === 'photos' ? 'all' : 'photos')}
+                >
+                  <Camera size={13} color={typeFilter === 'photos' ? palette.primary : palette.textSecondary} style={{ marginRight: 4 }} />
+                  <Text style={[styles.typeChipText, typeFilter === 'photos' && styles.typeChipTextActive]}>
+                    Photos ({stats.photos})
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {stats.bodyMap > 0 && (
+                <TouchableOpacity
+                  style={[styles.typeChip, typeFilter === 'bodymap' && styles.typeChipActive]}
+                  onPress={() => setTypeFilter(typeFilter === 'bodymap' ? 'all' : 'bodymap')}
+                >
+                  <Text style={{ fontSize: 13, marginRight: 2 }}>🧍</Text>
+                  <Text style={[styles.typeChipText, typeFilter === 'bodymap' && styles.typeChipTextActive]}>
+                    Body Map ({stats.bodyMap})
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+
+            {/* Category filter chips with entry count badges */}
+            {usedCats.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterRow}
+              >
+                <TouchableOpacity
+                  style={[styles.filterChip, filterCatId === null && styles.filterChipActive]}
+                  onPress={() => setFilterCatId(null)}
+                >
+                  <Text style={[styles.filterText, filterCatId === null && styles.filterTextActive]}>
+                    All Categories
+                  </Text>
+                </TouchableOpacity>
+
+                {usedCats.map(cat => {
+                  const isSelected = filterCatId === cat._id;
+                  return (
+                    <TouchableOpacity
+                      key={cat._id}
+                      style={[
+                        styles.filterChip,
+                        isSelected && { borderColor: cat.color, backgroundColor: cat.color + '18' },
+                      ]}
+                      onPress={() => setFilterCatId(isSelected ? null : cat._id)}
+                    >
+                      {cat.icon && <Text style={styles.filterIcon}>{cat.icon}</Text>}
+                      <Text style={[styles.filterText, isSelected && { color: cat.color, fontWeight: '700' }]}>
+                        {cat.name}
+                      </Text>
+                      <View style={[styles.catCountBadge, isSelected && { backgroundColor: cat.color + '28' }]}>
+                        <Text style={[styles.catCountText, isSelected && { color: cat.color }]}>
+                          {cat.count}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
         )}
 
         {/* Active Filter Feedback bar */}
@@ -564,18 +563,24 @@ const useStyles = createThemedStyles(palette => ({
   },
   dim: { opacity: 0.25 },
 
-  // Search
-  searchSection: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 4,
+  // Search & Filter Toolbar
+  filterToolbar: {
     backgroundColor: palette.surface,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: palette.border,
+    paddingTop: 10,
+    paddingBottom: 8,
+    marginTop: 4,
+    marginBottom: 6,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: palette.surfaceAlt,
-    borderRadius: 10,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
@@ -592,10 +597,9 @@ const useStyles = createThemedStyles(palette => ({
   // Type Filter Pills
   typeFilterRow: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingVertical: 2,
     gap: 8,
-    backgroundColor: palette.surface,
+    alignItems: 'center',
   },
   typeChip: {
     flexDirection: 'row',
@@ -625,12 +629,10 @@ const useStyles = createThemedStyles(palette => ({
   // Category Filter Chips
   filterRow: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 2,
     gap: 6,
-    backgroundColor: palette.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border + '60',
+    alignItems: 'center',
   },
   filterChip: {
     flexDirection: 'row',

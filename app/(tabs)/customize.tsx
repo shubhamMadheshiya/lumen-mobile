@@ -83,7 +83,7 @@ const NAV_ITEMS: NavItem[] = [
     color: '#0284C7',
     title: 'Reminders',
     subtitle: 'Time and inactivity alerts',
-    route: '/reminders',
+    route: '/reminders?mode=reminders',
   },
   {
     icon: UserCheck,

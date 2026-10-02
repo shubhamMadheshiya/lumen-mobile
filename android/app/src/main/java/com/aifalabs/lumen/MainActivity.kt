@@ -19,16 +19,20 @@ class MainActivity : ReactActivity() {
     super.onCreate(null)
 
     // Allow alarm notifications and reminders to wake the screen and display over the lock screen
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-      setShowWhenLocked(true)
-      setTurnScreenOn(true)
-    } else {
-      @Suppress("DEPRECATION")
-      window.addFlags(
-        android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-        android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-        android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-      )
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+      } else {
+        @Suppress("DEPRECATION")
+        window.addFlags(
+          android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+          android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+          android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        )
+      }
+    } catch (e: Exception) {
+      // Defensive fallback if restricted by device policy or vendor ROM
     }
   }
 

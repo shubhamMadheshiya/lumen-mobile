@@ -85,7 +85,7 @@ describe('Lumen Notification Engine & Clinical Alert Architecture', () => {
     it('creates all 3 specialized notification channels on Android', async () => {
       await ensureNotificationChannel();
 
-      expect(mockSetNotificationChannelAsync).toHaveBeenCalledTimes(3);
+      expect(mockSetNotificationChannelAsync).toHaveBeenCalledTimes(4);
 
       // Clinical Channel
       expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
@@ -93,7 +93,6 @@ describe('Lumen Notification Engine & Clinical Alert Architecture', () => {
         expect.objectContaining({
           name: 'Clinical & Flare Alerts',
           importance: 5,
-          bypassDnd: true,
           enableVibrate: true,
           vibrationPattern: [0, 400, 200, 400],
         })
@@ -116,6 +115,15 @@ describe('Lumen Notification Engine & Clinical Alert Architecture', () => {
           name: 'Activity Pacing & Spoon Theory',
           importance: 4,
           vibrationPattern: [0, 300, 150, 300],
+        })
+      );
+
+      // Legacy fallback channel
+      expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
+        'lumen_reminders_v1',
+        expect.objectContaining({
+          name: 'General Reminders',
+          importance: 4,
         })
       );
     });

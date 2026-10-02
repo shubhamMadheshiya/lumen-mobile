@@ -23,7 +23,6 @@ interface Props {
   quickActions?: IQuickAction[];
   loading: boolean;
   onDeleteEntry?: (id: string) => void;
-  onEditEntry?: (entry: ILogEntry) => void;
 }
 
 interface HourBucket {
@@ -48,7 +47,6 @@ export function DayView({
   quickActions = [],
   loading,
   onDeleteEntry,
-  onEditEntry,
 }: Props) {
   const { palette } = useTheme();
   const styles = useStyles();
@@ -147,7 +145,6 @@ export function DayView({
                   options={opts}
                   quickAction={qa}
                   onDelete={onDeleteEntry}
-                  onEdit={onEditEntry}
                 />
               );
             })}

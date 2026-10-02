@@ -250,7 +250,11 @@ export default function TimelineScreen() {
         </PressableScale>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Calendar heat map */}
         {showCalendar && (
           <View style={styles.calWrap}>
@@ -507,6 +511,7 @@ const useStyles = createThemedStyles(palette => ({
     fontSize: 12,
   },
   scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 110 },
   calWrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, backgroundColor: palette.background },
   dayNavCard: {
     flexDirection: 'row',

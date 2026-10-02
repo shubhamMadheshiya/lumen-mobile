@@ -8,12 +8,13 @@
  * ─ "Undo" toast
  * ─ Floating "+ Log" button
  */
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, RefreshControl, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
@@ -39,23 +40,38 @@ import { useQuickLogStore } from '../../src/store/quickLogStore';
 import { useActivityStore } from '../../src/store/activityStore';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useGlanceConfigStore } from '../../src/store/glanceConfigStore';
+import { useSleepTrackerStore } from '../../src/store/sleepTrackerStore';
+import { useWeatherStore } from '../../src/store/weatherStore';
 
 import { DayClockCard } from '../../src/components/DayClockCard';
 import { QuickActionButton } from '../../src/components/QuickActionButton';
 import { UndoToast } from '../../src/components/UndoToast';
 import { FlareNowButton } from '../../src/components/FlareNowButton';
 import { WaterQuantityModal } from '../../src/components/WaterQuantityModal';
+import { WalkingBannerCard } from '../../src/components/walking/WalkingBannerCard';
+import { WeatherReportModal } from '../../src/components/weather/WeatherReportModal';
 
 export default function TodayScreen() {
   const { palette } = useTheme();
   const styles = useStyles();
+  const scrollViewRef = useRef<ScrollView>(null);
   const { user, fetchProfile } = useAuthStore();
   const { config, fetchConfig } = useConfigStore();
   const { todaySession, fetchTodaySession } = useDaySessionStore();
   const { todayTaps, fetchTodayTaps } = useQuickLogStore();
-  const { todaySummary, fetchTodaySummary, isTracking } = useActivityStore();
+  const { todaySummary, fetchTodaySummary, isTracking, activePacingAlert } = useActivityStore();
   const { reminders, fetchReminders } = useReminderStore();
   const { fetchGlanceConfig, isMetricEnabled, getActiveCount } = useGlanceConfigStore();
+  const { isSleeping, lastSleepRecord, loadState: loadSleepState } = useSleepTrackerStore();
+  const {
+    weather,
+    assessment,
+    activeFlareAlert,
+    permissionStatus,
+    initWeather,
+    fetchWeather,
+    requestPermissionAndFetch,
+  } = useWeatherStore();
 
   const { width: windowWidth } = useWindowDimensions();
   // Screen padding is 16 on each side (32 total), and two 10px gaps between 3 columns (20 total)
@@ -64,6 +80,7 @@ export default function TodayScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [waterModalVisible, setWaterModalVisible] = useState(false);
   const [selectedWaterActionId, setSelectedWaterActionId] = useState<string | undefined>(undefined);
+  const [weatherModalVisible, setWeatherModalVisible] = useState(false);
 
   const loadData = useCallback(async () => {
     await Promise.all([
@@ -74,8 +91,10 @@ export default function TodayScreen() {
       fetchReminders(),
       fetchTodayTaps(),
       fetchGlanceConfig(),
+      loadSleepState(),
+      initWeather(),
     ]);
-  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps, fetchGlanceConfig]);
+  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps, fetchGlanceConfig, loadSleepState, initWeather]);
 
   useEffect(() => {
     loadData();
@@ -83,7 +102,10 @@ export default function TodayScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([
+      loadData(),
+      fetchWeather({ force: true, isUserRefresh: true }),
+    ]);
     setRefreshing(false);
   };
 
@@ -123,6 +145,7 @@ export default function TodayScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
@@ -138,10 +161,14 @@ export default function TodayScreen() {
               style={styles.reminderIconBtn}
               onPress={() => router.push('/reminders')}
               accessibilityRole="button"
-              accessibilityLabel="Open Reminders"
+              accessibilityLabel="Open Reminders & Alerts"
             >
               <Bell size={20} color={palette.text} />
-              {activeReminders.length > 0 ? <View style={styles.activeNotifDot} /> : null}
+              {activeReminders.length > 0 ||
+              (activeFlareAlert && !activeFlareAlert.dismissed) ||
+              (activePacingAlert && !activePacingAlert.dismissed) ? (
+                <View style={styles.activeNotifDot} />
+              ) : null}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -150,18 +177,25 @@ export default function TodayScreen() {
               accessibilityRole="button"
               accessibilityLabel="Open Profile & Settings"
             >
-              <Text style={styles.avatarText}>
-                {user?.name?.trim()
-                  ? user.name
-                      .trim()
-                      .split(/\s+/)
-                      .filter(Boolean)
-                      .map((n: string) => n[0])
-                      .join('')
-                      .slice(0, 2)
-                      .toUpperCase()
-                  : 'U'}
-              </Text>
+              <LinearGradient
+                colors={['#FFA448', '#FF581E']}
+                start={{ x: 0.15, y: 0.1 }}
+                end={{ x: 0.85, y: 0.95 }}
+                style={styles.avatarGradient}
+              >
+                <Text style={styles.avatarText}>
+                  {user?.name?.trim()
+                    ? user.name
+                        .trim()
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .map((n: string) => n[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase()
+                    : 'U'}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
@@ -172,40 +206,13 @@ export default function TodayScreen() {
         {/* Flare Now shortcut */}
         <FlareNowButton />
 
-        {/* Walking Tracker Card */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Walking</Text>
-            <TouchableOpacity onPress={() => router.push('/walking')}>
-              <Text style={styles.sectionActionText}>History</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.walkingCard}>
-            <View style={styles.walkingStatsRow}>
-              <View style={styles.walkingMetricItem}>
-                <Text style={styles.walkingMetricVal}>{todayDistanceKm.toFixed(1)} km</Text>
-                <Text style={styles.walkingMetricLabel}>Today's distance</Text>
-              </View>
-              <View style={styles.walkingDivider} />
-              <View style={styles.walkingMetricItem}>
-                <Text style={styles.walkingMetricVal}>{todayWalkingMinutes} min</Text>
-                <Text style={styles.walkingMetricLabel}>Today's time</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.walkingStartBtn}
-              onPress={handleStartWalking}
-              activeOpacity={0.88}
-            >
-              <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
-              <Text style={styles.walkingStartText}>
-                {isTracking ? 'CONTINUE WALKING' : 'START WALKING'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* Walking Tracker Card (Live weather displayed on card) */}
+        <WalkingBannerCard
+          distanceKm={todayDistanceKm}
+          durationMinutes={todayWalkingMinutes}
+          onPressHistory={() => router.push('/walking')}
+          onPressWeather={() => setWeatherModalVisible(true)}
+        />
 
         {/* Active Reminders Card */}
         <View style={styles.section}>
@@ -250,7 +257,7 @@ export default function TodayScreen() {
         {visibleActions.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Quick log</Text>
+              <Text style={styles.sectionTitle}>Quick Taps</Text>
               <TouchableOpacity
                 onPress={() => router.push('/customize/quick-actions')}
                 style={styles.seeAllBtn}
@@ -351,7 +358,7 @@ export default function TodayScreen() {
               <GlanceCard
                 icon={Stethoscope}
                 value={`${totalTapCount} logged`}
-                label="Quick logs"
+                label="Quick taps"
                 subtitle={`${distinctTapCount} metrics`}
                 color={palette.catSymptom}
                 onPress={() => router.push('/(tabs)/timeline')}
@@ -360,12 +367,32 @@ export default function TodayScreen() {
 
             {isMetricEnabled('day_session') && (
               <GlanceCard
-                icon={wakeTimeStr ? Sun : Moon}
-                value={wakeTimeStr || 'Clock in'}
-                label="Day session"
-                subtitle={todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')}
-                color={palette.catHabits}
-                onPress={() => router.push('/(tabs)/today')}
+                icon={isSleeping ? Moon : (lastSleepRecord ? Moon : (wakeTimeStr ? Sun : Moon))}
+                value={
+                  isSleeping
+                    ? 'In bed'
+                    : lastSleepRecord
+                      ? `${Math.floor(lastSleepRecord.durationMinutes / 60)}h ${lastSleepRecord.durationMinutes % 60}m`
+                      : (wakeTimeStr || 'Clock in')
+                }
+                label="Sleep session"
+                subtitle={
+                  isSleeping
+                    ? 'Sleeping now'
+                    : lastSleepRecord
+                      ? (lastSleepRecord.durationMinutes >= 420 ? '7–8h goal met' : 'Under 7h goal')
+                      : (todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started'))
+                }
+                color={
+                  isSleeping
+                    ? '#6366F1'
+                    : lastSleepRecord?.durationMinutes && lastSleepRecord.durationMinutes >= 420
+                      ? '#10B981'
+                      : palette.catHabits
+                }
+                onPress={() => {
+                  scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                }}
               />
             )}
 
@@ -428,6 +455,12 @@ export default function TodayScreen() {
           fetchTodayTaps();
         }}
       />
+
+      {/* Weather Report Modal */}
+      <WeatherReportModal
+        visible={weatherModalVisible}
+        onClose={() => setWeatherModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -489,6 +522,7 @@ const useStyles = createThemedStyles(palette => ({
   },
   content: {
     padding: 16,
+    paddingBottom: 110,
     gap: 18,
   },
   header: {
@@ -501,30 +535,71 @@ const useStyles = createThemedStyles(palette => ({
     ...typography.h2,
     color: palette.text,
   },
-  date: {
-    ...typography.body,
-    color: palette.textSecondary,
-    marginTop: 2,
+  dateAndWeatherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 3,
   },
-  reminderIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  weatherChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: palette.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: palette.border,
+    gap: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  weatherChipEmoji: {
+    fontSize: 12,
+  },
+  weatherChipText: {
+    ...typography.caption,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: palette.text,
+  },
+  weatherChipRiskDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  date: {
+    ...typography.body,
+    fontSize: 13,
+    color: palette.textSecondary,
+  },
+  reminderIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   activeNotifDot: {
     position: 'absolute',
-    top: 9,
-    right: 10,
+    top: 7,
+    right: 8,
     width: 7,
     height: 7,
-    borderRadius: 4,
-    backgroundColor: palette.primary,
+    borderRadius: 3.5,
+    backgroundColor: '#FF5E20',
   },
   headerActions: {
     flexDirection: 'row',
@@ -532,23 +607,27 @@ const useStyles = createThemedStyles(palette => ({
     gap: 10,
   },
   profileAvatarBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: palette.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: palette.primary,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    shadowColor: '#FF5E20',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
+    shadowOpacity: 0.28,
+    shadowRadius: 6,
     elevation: 3,
   },
+  avatarGradient: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarText: {
-    ...typography.caption,
-    fontWeight: '800',
+    fontSize: 13.5,
+    fontWeight: '600',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
   },
   section: {
     gap: 10,

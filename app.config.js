@@ -22,6 +22,7 @@ module.exports = {
         NSCameraUsageDescription: 'Lumen uses the camera to capture photos of symptoms or body output for tracking purposes.',
         NSPhotoLibraryUsageDescription: 'Lumen accesses your photo library to attach images to log entries.',
         NSFaceIDUsageDescription: 'Lumen uses Face ID to protect your health data.',
+        NSLocationWhenInUseUsageDescription: 'Lumen uses your location to provide hyper-local weather reports and assess autoimmune flare triggers like barometric pressure and UV levels.',
       },
     },
     android: {
@@ -43,6 +44,8 @@ module.exports = {
         'USE_FULL_SCREEN_INTENT',
         'WAKE_LOCK',
         'SYSTEM_ALERT_WINDOW',
+        'ACCESS_COARSE_LOCATION',
+        'ACCESS_FINE_LOCATION',
       ],
     },
     web: {

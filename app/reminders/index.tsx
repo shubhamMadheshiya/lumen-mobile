@@ -12,20 +12,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { safeGoBack } from '../../src/utils/navigation';
-import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft, RotateCcw, BellRing, Edit2 } from 'lucide-react-native';
+import { Plus, Bell, Clock, RefreshCw, Trash2, Copy, ChevronLeft, RotateCcw, BellRing, Edit2, AlertTriangle, CloudSun, X, Footprints, ShieldAlert } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
+import { useWeatherStore } from '../../src/store/weatherStore';
+import { useActivityStore } from '../../src/store/activityStore';
 import { sendTestReminderNotification, requestNotificationPermissions } from '../../src/services/notifications';
 import { IReminder, ReminderCategory } from '@lumen/shared';
 import { permissionService } from '../../src/services/permissionService';
 import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
+import { WeatherReportModal } from '../../src/components/weather/WeatherReportModal';
 
-type ReminderTabValue = ReminderCategory | 'ALL' | 'ARCHIVED';
+type ReminderTabValue = ReminderCategory | 'ALL' | 'ALERTS' | 'ARCHIVED';
 
 const CATEGORY_TABS: Array<{ label: string; value: ReminderTabValue }> = [
   { label: 'All', value: 'ALL' },
+  { label: '🚨 Clinical Alerts', value: 'ALERTS' },
   { label: 'Hydration', value: 'HYDRATION' },
   { label: 'Movement', value: 'MOVEMENT' },
   { label: 'Sleep', value: 'SLEEP' },
@@ -47,9 +51,12 @@ export default function RemindersScreen() {
     duplicateReminder,
     snooze,
   } = useReminderStore();
+  const { activeFlareAlert, dismissFlareAlert } = useWeatherStore();
+  const { activePacingAlert, dismissPacingAlert } = useActivityStore();
 
   const [selectedCategory, setSelectedCategory] = useState<ReminderTabValue>('ALL');
   const [refreshing, setRefreshing] = useState(false);
+  const [weatherModalVisible, setWeatherModalVisible] = useState(false);
 
   useEffect(() => {
     fetchReminders();
@@ -154,9 +161,19 @@ export default function RemindersScreen() {
     const isArchived = !!r.archivedAt;
     if (selectedCategory === 'ARCHIVED') return isArchived;
     if (isArchived) return false;
-    if (selectedCategory === 'ALL') return true;
+    if (selectedCategory === 'ALL' || selectedCategory === 'ALERTS') return true;
     return r.category === selectedCategory;
   });
+
+  const getCategoryColor = (cat: string) => {
+    switch (cat) {
+      case 'MEDICATION': return '#8B5CF6';
+      case 'HYDRATION': return '#0284C7';
+      case 'MOVEMENT': return '#FF6B35';
+      case 'SLEEP': return '#6366F1';
+      default: return palette.primary;
+    }
+  };
 
   const formatScheduleText = (r: IReminder) => {
     if (r.scheduleType === 'INTERVAL') {
@@ -186,7 +203,7 @@ export default function RemindersScreen() {
         >
           <ChevronLeft size={24} color={palette.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reminders</Text>
+        <Text style={styles.headerTitle}>Alerts & Reminders</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.testBtn}
@@ -235,6 +252,118 @@ export default function RemindersScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
       >
+        {/* Active Weather Flare Warning Notification */}
+        {activeFlareAlert && !activeFlareAlert.dismissed && (selectedCategory === 'ALL' || selectedCategory === 'ALERTS') && (
+          <View
+            style={[
+              styles.weatherAlertBanner,
+              {
+                borderColor: activeFlareAlert.riskLevel === 'high' ? '#EF444450' : '#F59E0B50',
+                backgroundColor: activeFlareAlert.riskLevel === 'high' ? '#EF444410' : '#F59E0B10',
+              },
+            ]}
+          >
+            <View style={styles.weatherAlertHeader}>
+              <View style={styles.weatherAlertTitleRow}>
+                <AlertTriangle
+                  size={18}
+                  color={activeFlareAlert.riskLevel === 'high' ? '#EF4444' : '#F59E0B'}
+                />
+                <Text
+                  style={[
+                    styles.weatherAlertTitle,
+                    { color: activeFlareAlert.riskLevel === 'high' ? '#EF4444' : '#F59E0B' },
+                  ]}
+                >
+                  {activeFlareAlert.title}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  dismissFlareAlert();
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss weather alert"
+              >
+                <X size={16} color={palette.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.weatherAlertMessage}>
+              {activeFlareAlert.message}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.weatherAlertDetailBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setWeatherModalVisible(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="View full weather report"
+            >
+              <CloudSun size={14} color={palette.primary} />
+              <Text style={styles.weatherAlertDetailText}>
+                View Atmospheric Pressure & UV Report
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Spoon Theory Activity Pacing Alert */}
+        {activePacingAlert && !activePacingAlert.dismissed && (selectedCategory === 'ALL' || selectedCategory === 'ALERTS') && (
+          <View
+            style={[
+              styles.weatherAlertBanner,
+              {
+                borderColor: '#FF6B3550',
+                backgroundColor: '#FF6B3510',
+              },
+            ]}
+          >
+            <View style={styles.weatherAlertHeader}>
+              <View style={styles.weatherAlertTitleRow}>
+                <Footprints size={18} color="#FF6B35" />
+                <Text style={[styles.weatherAlertTitle, { color: '#FF6B35' }]}>
+                  Spoon Theory Pacing Alert ({activePacingAlert.distanceKm} km)
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  dismissPacingAlert();
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss pacing alert"
+              >
+                <X size={16} color={palette.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.weatherAlertMessage}>
+              {activePacingAlert.message}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.weatherAlertDetailBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/walking');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="View walking activity"
+            >
+              <Footprints size={14} color="#FF6B35" />
+              <Text style={[styles.weatherAlertDetailText, { color: '#FF6B35' }]}>
+                View Walking Summary
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {filteredReminders.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Bell size={48} color={palette.placeholder} />
@@ -258,6 +387,11 @@ export default function RemindersScreen() {
                 </View>
 
                 <View style={styles.cardInfo}>
+                  <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(reminder.category) + '18' }]}>
+                    <Text style={[styles.categoryBadgeText, { color: getCategoryColor(reminder.category) }]}>
+                      {reminder.category}
+                    </Text>
+                  </View>
                   <Text style={styles.reminderTitle} numberOfLines={1}>
                     {reminder.name}
                   </Text>
@@ -363,6 +497,12 @@ export default function RemindersScreen() {
           setShowNotifModal(false);
           setPendingToggleId(null);
         }}
+      />
+
+      {/* Weather Report Modal */}
+      <WeatherReportModal
+        visible={weatherModalVisible}
+        onClose={() => setWeatherModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -545,5 +685,66 @@ const useStyles = createThemedStyles(palette => ({
   },
   footerIconBtn: {
     padding: 4,
+  },
+  weatherAlertBanner: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 14,
+    marginBottom: 14,
+  },
+  weatherAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  weatherAlertTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flex: 1,
+  },
+  weatherAlertTitle: {
+    ...typography.bodyBold,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  weatherAlertMessage: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: palette.text,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  weatherAlertDetailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: palette.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  weatherAlertDetailText: {
+    ...typography.caption,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: palette.primary,
+  },
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  categoryBadgeText: {
+    ...typography.caption,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 }));

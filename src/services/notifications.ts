@@ -32,9 +32,15 @@ try {
 }
 
 const MAPPING_KEY = 'lumen:notif:mapping_v2'; // { reminderId: string[] (notificationIds) }
-const CHANNEL_ID = 'lumen-reminders-v3';
+export const CHANNEL_ID_CLINICAL = 'lumen_clinical_flare_v1';
+export const CHANNEL_ID_HABITS = 'lumen_habits_v1';
+export const CHANNEL_ID_PACING = 'lumen_pacing_v1';
+const CHANNEL_ID = CHANNEL_ID_HABITS; // Default backwards-compatible alias
 
 export const NOTIF_CATEGORIES = {
+  FLARE: 'lumen_category_flare',
+  PACING: 'lumen_category_pacing',
+  MEDS: 'lumen_category_meds',
   WATER: 'lumen_category_water',
   WALK: 'lumen_category_walk',
   STAND: 'lumen_category_stand',
@@ -43,6 +49,11 @@ export const NOTIF_CATEGORIES = {
 };
 
 export const NOTIF_ACTIONS = {
+  VIEW_FLARE: 'action_view_flare',
+  LOG_SYMPTOM: 'action_log_symptom',
+  RESTING_NOW: 'action_resting_now',
+  VIEW_WALK: 'action_view_walk',
+  MARK_MED_TAKEN: 'action_mark_med_taken',
   LOG_250ML: 'action_log_250ml',
   LOG_500ML: 'action_log_500ml',
   START_WALK: 'action_start_walk',
@@ -50,6 +61,7 @@ export const NOTIF_ACTIONS = {
   START_SLEEP: 'action_start_sleep',
   SNOOZE_10: 'action_snooze_10',
   SNOOZE_15: 'action_snooze_15',
+  SNOOZE_30: 'action_snooze_30',
   DISMISS: 'action_dismiss',
 };
 
@@ -61,10 +73,22 @@ export async function setupNotificationCategories(): Promise<void> {
 
   try {
     await Promise.all([
+      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.FLARE, [
+        { identifier: NOTIF_ACTIONS.VIEW_FLARE, buttonTitle: '🌡️ View Report', options: { opensAppToForeground: true } },
+        { identifier: NOTIF_ACTIONS.LOG_SYMPTOM, buttonTitle: '🩹 Log Symptom', options: { opensAppToForeground: true } },
+      ]),
+      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.PACING, [
+        { identifier: NOTIF_ACTIONS.RESTING_NOW, buttonTitle: '🛋️ Resting Now', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.VIEW_WALK, buttonTitle: '🚶 View Walk', options: { opensAppToForeground: true } },
+      ]),
+      N.setNotificationCategoryAsync(NOTIF_CATEGORIES.MEDS, [
+        { identifier: NOTIF_ACTIONS.MARK_MED_TAKEN, buttonTitle: '✅ Mark Taken', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_15, buttonTitle: '⏱ Snooze 15m', options: { opensAppToForeground: false } },
+      ]),
       N.setNotificationCategoryAsync(NOTIF_CATEGORIES.WATER, [
         { identifier: NOTIF_ACTIONS.LOG_250ML, buttonTitle: '💧 +250 ml', options: { opensAppToForeground: false } },
         { identifier: NOTIF_ACTIONS.LOG_500ML, buttonTitle: '💧 +500 ml', options: { opensAppToForeground: false } },
-        { identifier: NOTIF_ACTIONS.SNOOZE_10, buttonTitle: '⏱ Snooze 10m', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_30, buttonTitle: '⏱ Snooze 30m', options: { opensAppToForeground: false } },
       ]),
       N.setNotificationCategoryAsync(NOTIF_CATEGORIES.WALK, [
         { identifier: NOTIF_ACTIONS.START_WALK, buttonTitle: '🚶 Start Walking', options: { opensAppToForeground: true } },
@@ -76,7 +100,7 @@ export async function setupNotificationCategories(): Promise<void> {
       ]),
       N.setNotificationCategoryAsync(NOTIF_CATEGORIES.SLEEP, [
         { identifier: NOTIF_ACTIONS.START_SLEEP, buttonTitle: '😴 Start Sleep', options: { opensAppToForeground: true } },
-        { identifier: NOTIF_ACTIONS.SNOOZE_15, buttonTitle: '⏱ Snooze 15m', options: { opensAppToForeground: false } },
+        { identifier: NOTIF_ACTIONS.SNOOZE_30, buttonTitle: '⏱ Wind-down +30m', options: { opensAppToForeground: false } },
       ]),
     ]);
   } catch (err) {
@@ -85,32 +109,52 @@ export async function setupNotificationCategories(): Promise<void> {
 }
 
 /**
- * Ensure the Android notification channel exists with MAX importance, vibration, sound, and lights.
- * Required for Android 8.0+ (API 26+) for audible reminder alarms.
+ * Ensure dedicated Android notification channels exist:
+ * 1. Clinical & Flare Alerts (MAX priority, bypass DND, alert chimes)
+ * 2. Daily Habits & Reminders (HIGH priority)
+ * 3. Spoon Theory & Activity Pacing (HIGH priority)
  */
 export async function ensureNotificationChannel(): Promise<void> {
   if (!N || Platform.OS !== 'android' || typeof N.setNotificationChannelAsync !== 'function') return;
   try {
-    await N.setNotificationChannelAsync(CHANNEL_ID, {
-      name: 'Lumen Reminders & Alarms',
-      description: 'Daily and scheduled alarms for hydration, medications, and wellness checks',
-      importance: N.AndroidImportance.MAX,
-      vibrationPattern: [0, 500, 250, 500, 250, 500],
-      sound: 'default',
-      enableLights: true,
-      enableVibrate: true,
-      lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
-      bypassDnd: true,
-      audioAttributes: {
-        usage: N.AndroidAudioUsage.ALARM,
-        contentType: N.AndroidAudioContentType.SONIFICATION,
-        flags: {
-          enforceAudibility: true,
-        },
-      },
-    });
+    await Promise.all([
+      // 1. Clinical Channel
+      N.setNotificationChannelAsync(CHANNEL_ID_CLINICAL, {
+        name: 'Clinical & Flare Alerts',
+        description: 'Critical atmospheric pressure drops, extreme UV warnings, and urgent medication timing',
+        importance: N.AndroidImportance.MAX,
+        vibrationPattern: [0, 400, 200, 400],
+        sound: 'default',
+        enableLights: true,
+        enableVibrate: true,
+        lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+      }),
+      // 2. Habits & Reminders Channel
+      N.setNotificationChannelAsync(CHANNEL_ID_HABITS, {
+        name: 'Habits & Health Reminders',
+        description: 'Scheduled reminders for hydration, movement, and sleep session tracking',
+        importance: N.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        sound: 'default',
+        enableLights: true,
+        enableVibrate: true,
+        lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+      }),
+      // 3. Activity Pacing Channel
+      N.setNotificationChannelAsync(CHANNEL_ID_PACING, {
+        name: 'Activity Pacing & Spoon Theory',
+        description: 'Milestones and post-exertional malaise fatigue prevention advice',
+        importance: N.AndroidImportance.HIGH,
+        vibrationPattern: [0, 300, 150, 300],
+        sound: 'default',
+        enableLights: true,
+        enableVibrate: true,
+        lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+      }),
+    ]);
   } catch (err) {
-    console.warn('[Notifications] Failed to ensure Android notification channel:', err);
+    console.warn('[Notifications] Failed to ensure Android notification channels:', err);
   }
 }
 
@@ -177,7 +221,16 @@ function resolveCategory(category: string): string {
     case 'MOVEMENT': return NOTIF_CATEGORIES.STAND;
     case 'EXERCISE': return NOTIF_CATEGORIES.WALK;
     case 'SLEEP': return NOTIF_CATEGORIES.SLEEP;
+    case 'MEDICATION': return NOTIF_CATEGORIES.MEDS;
     default: return NOTIF_CATEGORIES.DEFAULT;
+  }
+}
+
+function resolveChannel(category: string): string {
+  switch (category) {
+    case 'MEDICATION': return CHANNEL_ID_CLINICAL;
+    case 'EXERCISE': return CHANNEL_ID_PACING;
+    default: return CHANNEL_ID_HABITS;
   }
 }
 
@@ -216,6 +269,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
   }
 
   const categoryId = resolveCategory(reminder.category);
+  const channelId = resolveChannel(reminder.category);
   const scheduledIds: string[] = [];
 
   const commonContent = {
@@ -226,7 +280,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     sound: 'default',
     priority: 'max',
     vibrate: [0, 250, 250, 250],
-    ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+    ...(Platform.OS === 'android' ? { channelId } : {}),
   };
 
   try {
@@ -248,7 +302,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
         trigger: {
           type: N.SchedulableTriggerInputTypes.DATE,
           date: targetDate,
-          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+          ...(Platform.OS === 'android' ? { channelId } : {}),
         },
       });
       scheduledIds.push(id);
@@ -264,7 +318,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
           hour,
           minute,
           repeats: true,
-          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+          ...(Platform.OS === 'android' ? { channelId } : {}),
         },
       });
       scheduledIds.push(id);
@@ -286,7 +340,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
             hour,
             minute,
             repeats: true,
-            ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+            ...(Platform.OS === 'android' ? { channelId } : {}),
           },
         });
         scheduledIds.push(id);
@@ -315,7 +369,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
             hour: slotHour,
             minute: slotMinute,
             repeats: true,
-            ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+            ...(Platform.OS === 'android' ? { channelId } : {}),
           },
         });
         scheduledIds.push(id);
@@ -337,7 +391,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
           type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds,
           repeats: true,
-          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+          ...(Platform.OS === 'android' ? { channelId } : {}),
         },
       });
       scheduledIds.push(id);
@@ -508,6 +562,32 @@ export async function handleNotificationActionResponse(response: any): Promise<v
   }
 
   switch (actionIdentifier) {
+    case NOTIF_ACTIONS.VIEW_FLARE:
+      router.push('/(tabs)/today');
+      break;
+
+    case NOTIF_ACTIONS.LOG_SYMPTOM:
+      router.push('/quick-log');
+      break;
+
+    case NOTIF_ACTIONS.RESTING_NOW:
+      // Acknowledged resting in background to prevent PEM crash
+      break;
+
+    case NOTIF_ACTIONS.VIEW_WALK:
+      router.push('/walking');
+      break;
+
+    case NOTIF_ACTIONS.MARK_MED_TAKEN:
+      if (reminderId) {
+        // Log med event as taken
+        api.post(`/reminders/${reminderId}/event`, {
+          status: 'COMPLETED',
+          actionTaken: 'TAKEN',
+        }).catch(() => {});
+      }
+      break;
+
     case NOTIF_ACTIONS.LOG_250ML:
       if (data.linkedQuickActionId) {
         useQuickLogStore.getState().tap(data.linkedQuickActionId);
@@ -516,6 +596,7 @@ export async function handleNotificationActionResponse(response: any): Promise<v
 
     case NOTIF_ACTIONS.LOG_500ML:
       if (data.linkedQuickActionId) {
+        useQuickLogStore.getState().tap(data.linkedQuickActionId);
         useQuickLogStore.getState().tap(data.linkedQuickActionId);
       }
       break;
@@ -546,14 +627,89 @@ export async function handleNotificationActionResponse(response: any): Promise<v
       }
       break;
 
-    default:
-      // Default notification body tap -> opens the dedicated full-screen alarm interface
+    case NOTIF_ACTIONS.SNOOZE_30:
       if (reminderId) {
+        await snoozeReminder(reminderId, 30);
+      }
+      break;
+
+    default:
+      if (data?.type === 'WEATHER_FLARE_ALERT') {
+        router.push('/reminders');
+      } else if (data?.type === 'PACING_ALERT') {
+        router.push('/walking');
+      } else if (reminderId) {
         router.push(`/alarm/${reminderId}`);
-      } else if (data.linkedQuickActionId) {
+      } else if (data?.linkedQuickActionId) {
         router.push('/(tabs)/today');
       }
       break;
+  }
+}
+
+/**
+ * Dispatches an immediate high-priority native notification for weather flare risks
+ * (e.g. "High Flare Trigger Potential", barometric pressure drops, extreme UV warnings).
+ */
+export async function sendWeatherFlareNotification(
+  title: string,
+  body: string,
+  riskLevel: 'moderate' | 'high'
+): Promise<string | null> {
+  if (!N || typeof N.scheduleNotificationAsync !== 'function') return null;
+
+  try {
+    await ensureNotificationChannel();
+    const id = await N.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: { type: 'WEATHER_FLARE_ALERT', riskLevel },
+        categoryIdentifier: NOTIF_CATEGORIES.FLARE,
+        sound: 'default',
+        priority: 'max',
+        vibrate: [0, 450, 150, 450],
+        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID_CLINICAL } : {}),
+      },
+      trigger: null, // triggers immediately
+    });
+    return id;
+  } catch (err) {
+    console.warn('[Notifications] Failed to send weather flare notification:', err);
+    return null;
+  }
+}
+
+/**
+ * Dispatches a Spoon Theory pacing warning when walking or activity exceeds safe thresholds.
+ * Helps prevent post-exertional malaise (PEM) and next-day fatigue crashes.
+ */
+export async function sendPacingAlertNotification(
+  title: string,
+  body: string,
+  distanceKm: number
+): Promise<string | null> {
+  if (!N || typeof N.scheduleNotificationAsync !== 'function') return null;
+
+  try {
+    await ensureNotificationChannel();
+    const id = await N.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: { type: 'PACING_ALERT', distanceKm },
+        categoryIdentifier: NOTIF_CATEGORIES.PACING,
+        sound: 'default',
+        priority: 'high',
+        vibrate: [0, 300, 150, 300],
+        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID_PACING } : {}),
+      },
+      trigger: null,
+    });
+    return id;
+  } catch (err) {
+    console.warn('[Notifications] Failed to send pacing notification:', err);
+    return null;
   }
 }
 
@@ -562,3 +718,4 @@ export async function syncReminders(reminders: IReminder[]): Promise<void> {
     await scheduleReminder(r);
   }
 }
+

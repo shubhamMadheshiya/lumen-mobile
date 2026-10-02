@@ -9,8 +9,17 @@ import { uuidv4 } from '../utils/uuid';
 import { IActivitySession, IActivityPoint, ActivityType } from '@lumen/shared';
 import { api } from '../api/client';
 import { locationService } from '../services/locationService';
+import { sendPacingAlertNotification } from '../services/notifications';
 
 const SESSIONS_CACHE_KEY = 'lumen:activity:history_v1';
+
+export interface PacingAlert {
+  id: string;
+  distanceKm: number;
+  message: string;
+  timestamp: number;
+  dismissed: boolean;
+}
 
 export interface WalkingSummaryStats {
   period: string;
@@ -39,6 +48,7 @@ interface ActivityState {
   // Historical data & daily aggregates
   history: IActivitySession[];
   todaySummary: WalkingSummaryStats | null;
+  activePacingAlert: PacingAlert | null;
   isLoading: boolean;
   error: string | null;
 
@@ -48,6 +58,7 @@ interface ActivityState {
   resumeWalking: () => Promise<void>;
   stopWalking: (notes?: string) => Promise<IActivitySession | null>;
   discardWalking: () => Promise<void>;
+  dismissPacingAlert: () => void;
 
   fetchHistory: () => Promise<void>;
   fetchTodaySummary: () => Promise<void>;
@@ -68,6 +79,7 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
 
   history: [],
   todaySummary: null,
+  activePacingAlert: null,
   isLoading: false,
   error: null,
 
@@ -244,6 +256,23 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       history: [completedSession, ...state.history],
     }));
 
+    // Spoon Theory Pacing Check: If walk exceeded 3.0 km, trigger fatigue crash prevention warning
+    if (distKm >= 3.0) {
+      const pacingAlertObj: PacingAlert = {
+        id: `pacing-${Date.now()}`,
+        distanceKm: Number(distKm.toFixed(1)),
+        message: `You completed ${distKm.toFixed(1)} km! Autoimmune joints and muscles need post-exertional rest. Elevate your legs and hydrate now to prevent fatigue crashes.`,
+        timestamp: Date.now(),
+        dismissed: false,
+      };
+      set({ activePacingAlert: pacingAlertObj });
+      sendPacingAlertNotification(
+        '🏃 Spoon Theory Pacing Alert',
+        pacingAlertObj.message,
+        distKm
+      ).catch(() => {});
+    }
+
     // Cache updated history
     AsyncStorage.setItem(SESSIONS_CACHE_KEY, JSON.stringify(get().history)).catch(() => {});
 
@@ -288,6 +317,13 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       averagePaceMinPerKm: 0,
       routePoints: [],
     });
+  },
+
+  dismissPacingAlert: () => {
+    const current = get().activePacingAlert;
+    if (current) {
+      set({ activePacingAlert: { ...current, dismissed: true } });
+    }
   },
 
   fetchHistory: async () => {

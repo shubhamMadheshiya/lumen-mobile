@@ -20,6 +20,8 @@ import { uploadAnswerImages } from '../src/utils/uploadAnswerImages';
 import { useTheme, createThemedStyles } from '../src/theme/ThemeContext';
 import { typography } from '../src/theme/typography';
 import { QuestionCard } from '../src/components/QuestionCard';
+import { MorningSleepCheckinBanner } from '../src/components/sleep/MorningSleepCheckinBanner';
+import { useSleepTrackerStore, SleepQuality } from '../src/store/sleepTrackerStore';
 
 const META: Record<string, { emoji: string; title: string; subtitle: string }> = {
   morning: {
@@ -41,21 +43,34 @@ export default function CheckInModal() {
   const { config } = useConfigStore();
   const { todaySession } = useDaySessionStore();
   const { user } = useAuthStore();
+  const { lastSleepRecord } = useSleepTrackerStore();
 
   const [answersByQuestion, setAnswersByQuestion] = useState<Record<string, Answer[]>>({});
+  const [sleepQuality, setSleepQuality] = useState<SleepQuality | null>(lastSleepRecord?.quality ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const meta = META[type] ?? META.morning!;
   const freq: QuestionFrequency = type === 'evening' ? 'evening' : 'morning';
   const tempPrefUnit = user?.preferences.tempUnit ?? 'C';
 
-  const questions: IQuestion[] = (config?.questions ?? [])
+  const allQuestions: IQuestion[] = (config?.questions ?? [])
     .filter(q => q.isActive && (q.frequency === freq || q.frequency === 'anytime'))
     .sort((a, b) => a.order - b.order)
     .slice(0, 8); // limit check-in to 8 questions
 
+  // Check if a sleep quality question exists in template
+  const sleepQualityQuestion = allQuestions.find(
+    q => q.templateKey === 'q_sleep_quality' || q.title.toLowerCase().includes('how did you sleep')
+  );
+
+  // If in morning check-in, the AutoimmuneSleepCheckinBanner provides the enhanced sleep quality question,
+  // so filter out redundant standalone sleep questions to prevent duplication while showing all other questions.
+  const displayQuestions = type === 'morning' && sleepQualityQuestion
+    ? allQuestions.filter(q => q._id !== sleepQualityQuestion._id)
+    : allQuestions;
+
   const optionsByQuestion: Record<string, IOption[]> = {};
-  for (const q of questions) {
+  for (const q of allQuestions) {
     optionsByQuestion[q._id] = (config?.options ?? [])
       .filter(o => o.questionId === q._id && o.isActive)
       .sort((a, b) => a.order - b.order);
@@ -69,22 +84,59 @@ export default function CheckInModal() {
     [],
   );
 
+  const handleQualityChange = (quality: SleepQuality) => {
+    setSleepQuality(quality);
+    if (sleepQualityQuestion) {
+      const opts = optionsByQuestion[sleepQualityQuestion._id] ?? [];
+      const matchedOpt = opts.find(o => {
+        if (quality === 'RESTFUL') return o.templateKey === 'opt_sleep_great' || o.label.toLowerCase().includes('great');
+        if (quality === 'GOOD') return o.templateKey === 'opt_sleep_good' || o.label.toLowerCase().includes('good');
+        if (quality === 'FAIR') return o.templateKey === 'opt_sleep_fair' || o.label.toLowerCase().includes('fair');
+        if (quality === 'POOR') return o.templateKey === 'opt_sleep_poor' || o.label.toLowerCase().includes('poor');
+        return false;
+      }) ?? opts[0];
+
+      if (matchedOpt) {
+        const hoursSlept = lastSleepRecord ? +(lastSleepRecord.durationMinutes / 60).toFixed(1) : 8;
+        setQAnswers(sleepQualityQuestion._id, [
+          {
+            optionId: matchedOpt._id,
+            optionLabelSnapshot: matchedOpt.label,
+            values: [
+              {
+                fieldKey: 'hours',
+                dataType: 'number',
+                value: hoursSlept,
+                unit: 'h',
+              },
+            ],
+          },
+        ]);
+      }
+    }
+  };
+
   const handleSkip = () => safeGoBack('/(tabs)/today');
 
   const handleSubmit = async () => {
-    if (allAnswers.length === 0) { safeGoBack('/(tabs)/today'); return; }
+    if (allAnswers.length === 0 && !sleepQuality) {
+      safeGoBack('/(tabs)/today');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      const uploadedAnswers = await uploadAnswerImages(allAnswers);
-      await api.post('/logs', {
-        clientId: uuidv4(),
-        daySessionId: todaySession?._id,
-        source: 'check_in',
-        occurredAt: new Date().toISOString(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        answers: uploadedAnswers,
-      });
+      if (allAnswers.length > 0) {
+        const uploadedAnswers = await uploadAnswerImages(allAnswers);
+        await api.post('/logs', {
+          clientId: uuidv4(),
+          daySessionId: todaySession?._id,
+          source: 'check_in',
+          occurredAt: new Date().toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          answers: uploadedAnswers,
+        });
+      }
       safeGoBack('/(tabs)/today');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Check-in failed';
@@ -115,7 +167,16 @@ export default function CheckInModal() {
           <Text style={styles.heroSubtitle}>{meta.subtitle}</Text>
         </View>
 
-        {questions.length === 0 ? (
+        {/* Autoimmune Sleep Recovery Banner (Morning Check-in only) */}
+        {type === 'morning' && (
+          <MorningSleepCheckinBanner
+            selectedQuality={sleepQuality}
+            onQualityChange={handleQualityChange}
+          />
+        )}
+
+        {/* Check-In Questions */}
+        {displayQuestions.length === 0 && type !== 'morning' ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>No check-in questions configured yet.</Text>
             <Text style={styles.emptyHint}>
@@ -123,7 +184,7 @@ export default function CheckInModal() {
             </Text>
           </View>
         ) : (
-          questions.map((q) => (
+          displayQuestions.map((q) => (
             <QuestionCard
               key={q._id}
               question={q}

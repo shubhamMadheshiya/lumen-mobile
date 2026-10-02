@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Tabs, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import {
   Home,
@@ -21,6 +22,13 @@ import { useTheme } from '../../src/theme/ThemeContext';
 
 export default function TabLayout() {
   const { palette } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // Dynamically account for Android 3-button navigation bar (~48dp), gesture pill (~16-24dp), and iOS Home Indicator (~34dp)
+  const bottomInset = insets.bottom;
+  const baseContentHeight = 60;
+  const tabHeight = baseContentHeight + bottomInset;
+  const tabPaddingBottom = bottomInset > 0 ? bottomInset + 2 : (Platform.OS === 'ios' ? 20 : 8);
 
   return (
     <Tabs
@@ -28,13 +36,13 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: palette.primary,
         tabBarInactiveTintColor: palette.textDisabled,
-        tabBarBackground: () => <CurvedTabBarBackground />,
+        tabBarBackground: () => <CurvedTabBarBackground tabHeight={tabHeight} />,
         tabBarStyle: {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: Platform.OS === 'ios' ? 76 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 22 : 8,
+          height: tabHeight,
+          paddingBottom: tabPaddingBottom,
           paddingTop: 6,
           overflow: 'visible',
           shadowColor: '#000',
@@ -181,11 +189,12 @@ function AnimatedTabBarIcon({
   );
 }
 
-function CurvedTabBarBackground() {
+function CurvedTabBarBackground({ tabHeight }: { tabHeight?: number }) {
   const { width } = useWindowDimensions();
   const { palette } = useTheme();
+  const insets = useSafeAreaInsets();
 
-  const barHeight = Platform.OS === 'ios' ? 76 : 64;
+  const barHeight = tabHeight ?? (60 + insets.bottom);
   const notchHalfWidth = 50;
   const notchDepth = 37;
   const cx = width / 2;
@@ -215,7 +224,7 @@ function CurvedTabBarBackground() {
   `;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, { height: barHeight }]} pointerEvents="none">
       <Svg width={width} height={barHeight} style={StyleSheet.absoluteFill}>
         <Path d={fillPath} fill={palette.surface} />
         <Path

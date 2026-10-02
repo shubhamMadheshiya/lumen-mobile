@@ -45,8 +45,8 @@ export const AVAILABLE_METRICS: MetricDefinition[] = [
   },
   {
     key: 'quick_logs',
-    label: 'Quick Logs',
-    description: 'Count of symptoms and check-ins recorded today',
+    label: 'Quick Taps',
+    description: 'Count of quick taps and check-ins recorded today',
     category: 'Logging',
     color: '#F43F5E',
     defaultEnabled: true,

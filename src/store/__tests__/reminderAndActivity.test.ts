@@ -15,6 +15,8 @@ jest.mock('../../services/notifications', () => ({
   scheduleReminder: jest.fn().mockResolvedValue(undefined),
   cancelReminder: jest.fn().mockResolvedValue(undefined),
   snoozeReminder: jest.fn().mockResolvedValue(undefined),
+  sendPacingAlertNotification: jest.fn().mockResolvedValue('mock_pacing_id'),
+  sendWeatherFlareNotification: jest.fn().mockResolvedValue('mock_flare_id'),
 }));
 
 jest.mock('../../services/locationService', () => ({

@@ -28,7 +28,11 @@ import {
   Moon,
   Timer,
   SlidersHorizontal,
+  Edit2,
+  Plus,
 } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { ILogEntry } from '@lumen/shared';
 
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
@@ -39,12 +43,70 @@ import { useQuickLogStore } from '../../src/store/quickLogStore';
 import { useActivityStore } from '../../src/store/activityStore';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useGlanceConfigStore } from '../../src/store/glanceConfigStore';
+import { useDayEntries } from '../../src/hooks/useTimelineSummary';
 
 import { DayClockCard } from '../../src/components/DayClockCard';
 import { QuickActionButton } from '../../src/components/QuickActionButton';
 import { UndoToast } from '../../src/components/UndoToast';
 import { FlareNowButton } from '../../src/components/FlareNowButton';
 import { WaterQuantityModal } from '../../src/components/WaterQuantityModal';
+import { EditLogModal } from '../../src/components/timeline/EditLogModal';
+
+function formatLogTime(iso: string): string {
+  const d = new Date(iso);
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h % 12 || 12}:${m} ${ampm}`;
+}
+
+function getLogMeta(
+  entry: ILogEntry,
+  categories: any[],
+  quickActions: any[],
+  palette: any
+) {
+  const isQuickAction = entry.source === 'quick_action' || !!entry.quickActionId;
+  const qa = isQuickAction ? quickActions.find(a => a._id === entry.quickActionId) : undefined;
+  const cat = categories.find(c => c._id === entry.categoryId);
+
+  const title = isQuickAction
+    ? (qa?.label ?? 'Quick Tap')
+    : (cat?.name ?? 'Log Entry');
+
+  const icon = isQuickAction
+    ? (qa?.icon ?? '⚡')
+    : (cat?.icon ?? '📝');
+
+  const color = isQuickAction
+    ? (qa?.color ?? palette.primary)
+    : (cat?.color ?? palette.primary);
+
+  let detail = '';
+  if (entry.note) {
+    detail = entry.note;
+  } else if (qa?.defaultValue != null) {
+    detail = `+${qa.defaultValue}${qa.unit ? ' ' + qa.unit : ''}`;
+  } else if (entry.answers && entry.answers.length > 0) {
+    const parts: string[] = [];
+    for (const ans of entry.answers) {
+      for (const val of ans.values || []) {
+        if (val.value != null && val.value !== '') {
+          if (val.dataType === 'range') {
+            parts.push(`${val.value}/10`);
+          } else if (val.dataType === 'boolean') {
+            parts.push(val.value ? 'Yes' : 'No');
+          } else {
+            parts.push(String(val.value));
+          }
+        }
+      }
+    }
+    detail = parts.join(' • ');
+  }
+
+  return { title, icon, color, detail };
+}
 
 export default function TodayScreen() {
   const { palette } = useTheme();
@@ -61,9 +123,18 @@ export default function TodayScreen() {
   // Screen padding is 16 on each side (32 total), and two 10px gaps between 3 columns (20 total)
   const quickActionWidth = Math.max(88, Math.floor((windowWidth - 32 - 20) / 3));
 
+  const queryClient = useQueryClient();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const { data: todayLogs = [], refetch: refetchTodayLogs } = useDayEntries(todayIso);
+
   const [refreshing, setRefreshing] = useState(false);
   const [waterModalVisible, setWaterModalVisible] = useState(false);
   const [selectedWaterActionId, setSelectedWaterActionId] = useState<string | undefined>(undefined);
+  const [editingLog, setEditingLog] = useState<ILogEntry | null>(null);
+
+  const sortedTodayLogs = React.useMemo(() => {
+    return [...todayLogs].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+  }, [todayLogs]);
 
   const loadData = useCallback(async () => {
     await Promise.all([
@@ -74,8 +145,9 @@ export default function TodayScreen() {
       fetchReminders(),
       fetchTodayTaps(),
       fetchGlanceConfig(),
+      refetchTodayLogs(),
     ]);
-  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps, fetchGlanceConfig]);
+  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps, fetchGlanceConfig, refetchTodayLogs]);
 
   useEffect(() => {
     loadData();
@@ -413,6 +485,114 @@ export default function TodayScreen() {
           </View>
         </View>
 
+        {/* Today's Activity & Log History */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.activityHeaderTitleRow}>
+              <Text style={styles.sectionTitle}>Today's Activity</Text>
+              {sortedTodayLogs.length > 0 && (
+                <View style={styles.logCountBadge}>
+                  <Text style={styles.logCountText}>{sortedTodayLogs.length}</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/timeline');
+              }}
+              style={styles.seeAllBtn}
+              accessibilityRole="button"
+              accessibilityLabel="View full timeline"
+            >
+              <Text style={styles.seeAllText}>Timeline</Text>
+              <ChevronRight size={14} color={palette.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {sortedTodayLogs.length === 0 ? (
+            <View style={styles.emptyActivityCard}>
+              <View style={[styles.emptyActivityIcon, { backgroundColor: palette.surfaceAlt }]}>
+                <Clock size={20} color={palette.textDisabled} />
+              </View>
+              <Text style={styles.emptyActivityTitle}>No logs recorded yet today</Text>
+              <Text style={styles.emptyActivitySubtitle}>
+                Use Quick Taps or tap "+ Log" to record symptoms, habits, or medications.
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyLogBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/log');
+                }}
+                activeOpacity={0.8}
+              >
+                <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.emptyLogBtnText}>Record Log</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.activityList}>
+              {sortedTodayLogs.slice(0, 4).map(entry => {
+                const meta = getLogMeta(entry, config?.categories ?? [], config?.quickActions ?? [], palette);
+                return (
+                  <TouchableOpacity
+                    key={entry._id}
+                    style={styles.activityItem}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setEditingLog(entry);
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit log ${meta.title}`}
+                  >
+                    <View style={[styles.activityIconBox, { backgroundColor: `${meta.color}15`, borderColor: `${meta.color}30` }]}>
+                      <Text style={styles.activityEmoji}>{meta.icon}</Text>
+                    </View>
+                    <View style={styles.activityContent}>
+                      <View style={styles.activityMainRow}>
+                        <Text style={styles.activityItemTitle} numberOfLines={1}>{meta.title}</Text>
+                        <Text style={styles.activityTime}>{formatLogTime(entry.occurredAt)}</Text>
+                      </View>
+                      {meta.detail ? (
+                        <Text style={styles.activityDetail} numberOfLines={1}>{meta.detail}</Text>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.activityEditBtn}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setEditingLog(entry);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Edit log entry"
+                    >
+                      <Edit2 size={13} color={palette.textSecondary} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {sortedTodayLogs.length > 4 && (
+                <TouchableOpacity
+                  style={styles.moreLogsBtn}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push('/(tabs)/timeline');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.moreLogsText}>
+                    + {sortedTodayLogs.length - 4} more logs in Timeline
+                  </Text>
+                  <ChevronRight size={13} color={palette.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+
         <View style={{ height: 24 }} />
       </ScrollView>
 
@@ -425,6 +605,27 @@ export default function TodayScreen() {
         onClose={() => setWaterModalVisible(false)}
         quickActionId={selectedWaterActionId || waterAction?._id}
         onLogged={() => {
+          fetchTodayTaps();
+        }}
+      />
+
+      {/* Edit Log Modal */}
+      <EditLogModal
+        visible={!!editingLog}
+        entry={editingLog}
+        onClose={() => setEditingLog(null)}
+        categories={config?.categories ?? []}
+        questions={config?.questions ?? []}
+        options={config?.options ?? []}
+        quickActions={config?.quickActions ?? []}
+        onDeleted={() => {
+          queryClient.invalidateQueries({ queryKey: ['day-entries', todayIso] });
+          queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+          fetchTodayTaps();
+        }}
+        onUpdated={() => {
+          queryClient.invalidateQueries({ queryKey: ['day-entries', todayIso] });
+          queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
           fetchTodayTaps();
         }}
       />
@@ -783,5 +984,145 @@ const useStyles = createThemedStyles(palette => ({
   },
   glanceChevron: {
     opacity: 0.5,
+  },
+  activityHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logCountBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: `${palette.primary}20`,
+  },
+  logCountText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: palette.primary,
+  },
+  emptyActivityCard: {
+    backgroundColor: palette.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    padding: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyActivityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyActivityTitle: {
+    ...typography.body,
+    fontWeight: '600',
+    color: palette.text,
+  },
+  emptyActivitySubtitle: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    textAlign: 'center',
+    maxWidth: 260,
+    lineHeight: 18,
+  },
+  emptyLogBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: palette.primary,
+  },
+  emptyLogBtnText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  activityList: {
+    backgroundColor: palette.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    overflow: 'hidden',
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    gap: 12,
+  },
+  activityIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityEmoji: {
+    fontSize: 17,
+  },
+  activityContent: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 2,
+  },
+  activityMainRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activityItemTitle: {
+    ...typography.body,
+    fontWeight: '600',
+    color: palette.text,
+    fontSize: 14,
+    flex: 1,
+    marginRight: 8,
+  },
+  activityTime: {
+    ...typography.caption,
+    fontSize: 11,
+    color: palette.textDisabled,
+  },
+  activityDetail: {
+    ...typography.caption,
+    fontSize: 12,
+    color: palette.textSecondary,
+  },
+  activityEditBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  moreLogsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 4,
+    backgroundColor: palette.surfaceAlt,
+  },
+  moreLogsText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: palette.primary,
+    fontSize: 12,
   },
 }));

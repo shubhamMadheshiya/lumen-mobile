@@ -10,10 +10,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useConfigStore } from '../../src/store/configStore';
 import { CalendarHeatMap } from '../../src/components/timeline/CalendarHeatMap';
 import { DayView } from '../../src/components/timeline/DayView';
+import { EditLogModal } from '../../src/components/timeline/EditLogModal';
 import { useTimelineSummary, useDayEntries } from '../../src/hooks/useTimelineSummary';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { api } from '../../src/api/client';
+import { ILogEntry } from '@lumen/shared';
 
 function toISO(d: Date) { return d.toISOString().slice(0, 10); }
 
@@ -27,6 +29,7 @@ export default function TimelineScreen() {
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [showCalendar, setShowCalendar] = useState(true);
   const [calViewMode, setCalViewMode] = useState<'week' | 'month'>('week');
+  const [editingEntry, setEditingEntry] = useState<ILogEntry | null>(null);
 
   const { config } = useConfigStore();
   const { data: summary = [], isLoading: summaryLoading } = useTimelineSummary(calYear, calMonth);
@@ -122,7 +125,10 @@ export default function TimelineScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.heading}>Timeline</Text>
+        <View>
+          <Text style={styles.heading}>Timeline</Text>
+          <Text style={styles.subheading}>Complete Logbook & History</Text>
+        </View>
         <TouchableOpacity onPress={() => setShowCalendar(v => !v)} style={styles.toggleBtn}>
           <Text style={styles.toggleText}>{showCalendar ? 'Hide calendar' : 'Show calendar'}</Text>
         </TouchableOpacity>
@@ -233,9 +239,29 @@ export default function TimelineScreen() {
             quickActions={quickActions}
             loading={entriesLoading}
             onDeleteEntry={handleDeleteEntry}
+            onEditEntry={setEditingEntry}
           />
         </View>
       </ScrollView>
+
+      {/* Edit Log Modal */}
+      <EditLogModal
+        visible={!!editingEntry}
+        entry={editingEntry}
+        onClose={() => setEditingEntry(null)}
+        categories={categories}
+        questions={questions}
+        options={options}
+        quickActions={quickActions}
+        onDeleted={() => {
+          queryClient.invalidateQueries({ queryKey: ['day-entries', selectedDate] });
+          queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+        }}
+        onUpdated={() => {
+          queryClient.invalidateQueries({ queryKey: ['day-entries', selectedDate] });
+          queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -244,6 +270,7 @@ const useStyles = createThemedStyles(palette => ({
   safe: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   heading: { ...typography.h2, color: palette.text },
+  subheading: { ...typography.caption, color: palette.textSecondary, marginTop: 2, fontWeight: '500' },
   toggleBtn: { padding: 6 },
   toggleText: { ...typography.small, color: palette.primary, fontWeight: '600' },
   scroll: { flex: 1 },

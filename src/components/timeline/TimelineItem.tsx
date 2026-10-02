@@ -5,7 +5,7 @@
  */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
-import { Trash2 } from 'lucide-react-native';
+import { Trash2, Edit2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction } from '@lumen/shared';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
@@ -18,6 +18,7 @@ interface Props {
   options: IOption[];
   quickAction?: IQuickAction;
   onPress?: () => void;
+  onEdit?: (entry: ILogEntry) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -55,7 +56,7 @@ function renderFieldValue(value: unknown, dataType: string, unit?: string): stri
   }
 }
 
-export function TimelineItem({ entry, category, question, options, quickAction, onPress, onDelete }: Props) {
+export function TimelineItem({ entry, category, question, options, quickAction, onPress, onEdit, onDelete }: Props) {
   const { palette } = useTheme();
   const styles = useStyles();
   const [expanded, setExpanded] = useState(false);
@@ -93,10 +94,19 @@ export function TimelineItem({ entry, category, question, options, quickAction, 
     );
   };
 
+  const handleCardPress = () => {
+    if (onEdit) {
+      onEdit(entry);
+    } else {
+      setExpanded(e => !e);
+      onPress?.();
+    }
+  };
+
   return (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => { setExpanded(e => !e); onPress?.(); }}
+      onPress={handleCardPress}
       activeOpacity={0.88}
       accessibilityRole="button"
       accessibilityLabel={`${title} at ${formatTime(entry.occurredAt)}`}
@@ -118,9 +128,26 @@ export function TimelineItem({ entry, category, question, options, quickAction, 
               <Text style={[styles.sourceBadge, { borderColor: accentColor + '55', color: accentColor, backgroundColor: accentColor + '0D' }]}>
                 {SOURCE_LABEL[entry.source] ?? entry.source}
               </Text>
+              {onEdit && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onEdit(entry);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.trashBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit entry"
+                >
+                  <Edit2 size={13} color={palette.textSecondary} />
+                </TouchableOpacity>
+              )}
               {onDelete && (
                 <TouchableOpacity
-                  onPress={handleDelete}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDelete();
+                  }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   style={styles.trashBtn}
                   accessibilityRole="button"

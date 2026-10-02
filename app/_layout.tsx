@@ -14,6 +14,8 @@ import { useAuthStore } from '../src/store/authStore';
 import { installGlobalAlert, CustomAlertModal } from '../src/components/alert';
 import { InitialPermissionsModal } from '../src/components/permissions/InitialPermissionsModal';
 import { permissionService } from '../src/services/permissionService';
+import { useAppLock } from '../src/hooks/useAppLock';
+import { AppLockOverlay } from '../src/components/security/AppLockOverlay';
 
 // Install custom alert interceptor globally for all Alert.alert() calls
 try {
@@ -40,6 +42,7 @@ const queryClient = new QueryClient({
 
 function AppBootstrap() {
   useNotificationSync();
+  useAppLock();
   const { palette, colorScheme } = useTheme();
   const { fetchConfig } = useConfigStore();
   const initAuth = useAuthStore(s => s.initAuth);
@@ -72,6 +75,7 @@ function AppBootstrap() {
         }}
       />
       <CustomAlertModal />
+      <AppLockOverlay />
       <InitialPermissionsModal
         visible={showInitialPrimer}
         onComplete={() => setShowInitialPrimer(false)}

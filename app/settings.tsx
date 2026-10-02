@@ -29,6 +29,7 @@ import { safeGoBack } from '../src/utils/navigation';
 import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSecurityStore } from '../src/store/securityStore';
 import {
   ChevronLeft,
   ChevronRight,
@@ -141,15 +142,14 @@ export default function SettingsScreen() {
   const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [vitalsSaved, setVitalsSaved] = useState(false);
 
-  // Security state
-  const [appLock, setAppLock] = useState(false);
+  // Security state from securityStore
+  const isAppLockEnabled = useSecurityStore(s => s.isAppLockEnabled);
+  const toggleAppLock = useSecurityStore(s => s.toggleAppLock);
+  const biometricType = useSecurityStore(s => s.biometricType);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     fetchProfile().catch(() => {});
-    AsyncStorage.getItem(APP_LOCK_KEY)
-      .then(val => setAppLock(val === 'true'))
-      .catch(() => {});
   }, [fetchProfile]);
 
   useEffect(() => {
@@ -305,21 +305,13 @@ export default function SettingsScreen() {
 
   // App Lock Switch Handler
   const handleToggleAppLock = async (value: boolean) => {
-    if (value) {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-
-      if (hasHardware && isEnrolled) {
-        const result = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Verify identity to enable App Lock',
-          fallbackLabel: 'Use Passcode',
-        });
-        if (!result.success) return;
-      }
+    Haptics.selectionAsync();
+    const result = await toggleAppLock(value);
+    if (!result.success && result.message) {
+      Alert.alert('Biometric App Lock', result.message);
+    } else if (result.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    setAppLock(value);
-    await AsyncStorage.setItem(APP_LOCK_KEY, value ? 'true' : 'false');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   // Logout Handler
@@ -782,14 +774,20 @@ export default function SettingsScreen() {
               <Shield size={18} color={palette.textSecondary} />
               <View>
                 <Text style={styles.rowLabel}>Biometric App Lock</Text>
-                <Text style={styles.rowSub}>Require Face ID or passcode upon launch</Text>
+                <Text style={styles.rowSub}>
+                  {biometricType === 'FACE'
+                    ? 'Require Face ID or device passcode upon launch'
+                    : biometricType === 'FINGERPRINT'
+                    ? 'Require fingerprint or device passcode upon launch'
+                    : 'Require biometrics or device passcode upon launch'}
+                </Text>
               </View>
             </View>
             <Switch
-              value={appLock}
+              value={isAppLockEnabled}
               onValueChange={handleToggleAppLock}
               trackColor={{ false: palette.border, true: palette.primary + '88' }}
-              thumbColor={appLock ? palette.primary : palette.textDisabled}
+              thumbColor={isAppLockEnabled ? palette.primary : palette.textDisabled}
               accessibilityLabel="Biometric App Lock"
             />
           </View>

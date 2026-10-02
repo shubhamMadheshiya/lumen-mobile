@@ -55,12 +55,12 @@ export function DayView({
   const { palette } = useTheme();
   const styles = useStyles();
 
-  // Bulk expand/collapse state: null = individual card preference, true = all expanded, false = all collapsed
-  const [allExpanded, setAllExpanded] = useState<boolean | null>(null);
+  // Bulk expand/collapse state: defaults to false (collapsed by default)
+  const [allExpanded, setAllExpanded] = useState<boolean | null>(false);
 
   const toggleAllExpanded = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setAllExpanded(prev => (prev === false ? true : false));
+    setAllExpanded(prev => (prev === true ? false : true));
   };
 
   const buckets = useMemo<HourBucket[]>(() => {
@@ -135,15 +135,15 @@ export function DayView({
             onPress={toggleAllExpanded}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel={allExpanded === false ? 'Expand all logs' : 'Collapse all logs'}
+            accessibilityLabel={allExpanded ? 'Collapse all logs' : 'Expand all logs'}
           >
             <Text style={[styles.expandAllText, { color: palette.primary }]}>
-              {allExpanded === false ? 'Expand all' : 'Collapse all'}
+              {allExpanded ? 'Collapse all' : 'Expand all'}
             </Text>
-            {allExpanded === false ? (
-              <ChevronDown size={14} color={palette.primary} />
-            ) : (
+            {allExpanded ? (
               <ChevronUp size={14} color={palette.primary} />
+            ) : (
+              <ChevronDown size={14} color={palette.primary} />
             )}
           </TouchableOpacity>
         )}

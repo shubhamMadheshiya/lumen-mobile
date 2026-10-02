@@ -78,7 +78,7 @@ export function TimelineItem({
   onPress,
   onEdit,
   onDelete,
-  defaultExpanded = true,
+  defaultExpanded = false,
   forceExpanded,
 }: Props) {
   const { palette, colorScheme } = useTheme();

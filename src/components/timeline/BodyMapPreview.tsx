@@ -55,7 +55,7 @@ interface Props {
 export function BodyMapPreview({
   selectedKeys,
   fieldLabel = 'Location',
-  defaultExpanded = true,
+  defaultExpanded = false,
 }: Props) {
   const { palette, colorScheme } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);

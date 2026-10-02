@@ -15,7 +15,11 @@ import { useAuthStore } from '../src/store/authStore';
 import { installGlobalAlert, CustomAlertModal } from '../src/components/alert';
 
 // Install custom alert interceptor globally for all Alert.alert() calls
-installGlobalAlert();
+try {
+  installGlobalAlert();
+} catch (e) {
+  console.warn('[RootLayout] installGlobalAlert error:', e);
+}
 
 // Handle OAuth redirect completion on web as early as possible
 if (Platform.OS === 'web') {

@@ -1,18 +1,50 @@
 /**
  * Emoji utility for validating and extracting emojis from user keyboard input.
  * Supports Unicode 15+, ZWJ sequences, skin-tone modifiers, flags, and keycaps.
+ *
+ * NOTE: Uses explicit surrogate and code point ranges rather than \p{Extended_Pictographic}
+ * to prevent Hermes SyntaxError crashes on Android release builds.
  */
 
-// Core emoji pattern:
-// 1. Regional indicator pairs (flags, e.g. 🇺🇸)
-// 2. Keycap sequences (e.g. 1️⃣)
-// 3. Extended pictographic or standard emoji presentation, with optional variation selector and skin tone
-// 4. Repeated with ZWJ (\u200D) chains for compound emojis (e.g. 👨‍👩‍👧‍👦, 👩‍⚕️, 🏃‍♂️)
-const EMOJI_TOKEN_PATTERN =
-  '(?:[\\u{1F1E6}-\\u{1F1FF}]{2}|[0-9#*][\\u{FE0E}\\u{FE0F}]?\\u{20E3}|(?:\\p{Extended_Pictographic}|\\p{Emoji_Presentation})(?:[\\u{FE0E}\\u{FE0F}]|[\\u{1F3FB}-\\u{1F3FF}])?)(?:\\u{200D}(?:[\\u{1F1E6}-\\u{1F1FF}]{2}|[0-9#*][\\u{FE0E}\\u{FE0F}]?\\u{20E3}|(?:\\p{Extended_Pictographic}|\\p{Emoji_Presentation})(?:[\\u{FE0E}\\u{FE0F}]|[\\u{1F3FB}-\\u{1F3FF}])?))*';
+// Base emoji definitions using explicit Unicode code points and surrogate pairs (Hermes-safe)
+const EMOJI_BASE_RANGE =
+  '(?:[\\uD83C][\\uDDE6-\\uDDFF]){2}|' + // Regional indicator pairs (flags, e.g. 🇺🇸, 🇮🇳)
+  '[' +
+  '\\u231A-\\u231B' + // Watch, hourglass
+  '\\u23E9-\\u23EC' + // Fast-forward, rewind
+  '\\u23F0' +         // Alarm clock
+  '\\u23F3' +         // Hourglass flowing
+  '\\u25FD-\\u25FE' + // Small black/white squares
+  '\\u2600-\\u27BF' + // Miscellaneous symbols & Dingbats (☀️, ☕, ✨, ⚡, ⛺, etc.)
+  '\\u2B1B-\\u2B1C' + // Black/white large square
+  '\\u2B50' +         // Star
+  '\\u2B55' +         // Heavy large circle
+  ']|' +
+  '[\\uD83C-\\uD83E][\\uDC00-\\uDFFF]|' + // Supplementary Multilingual Plane (all modern emoji surrogate pairs)
+  '[0-9#*][\\uFE0E\\uFE0F]?\\u20E3';     // Keycaps (e.g. 1️⃣)
 
-const SINGLE_EMOJI_REGEX = new RegExp(`^${EMOJI_TOKEN_PATTERN}$`, 'u');
-const ALL_EMOJIS_REGEX = new RegExp(EMOJI_TOKEN_PATTERN, 'gu');
+// Full emoji pattern allowing skin tones, variation selectors, and ZWJ compound chains
+const EMOJI_TOKEN_PATTERN =
+  '(?:' +
+  '(?:' + EMOJI_BASE_RANGE + ')' +
+  '(?:[\\uFE0E\\uFE0F]|[\\uD83C][\\uDFFB-\\uDFFF])?' +
+  '(?:\\u200D(?:' +
+  '(?:' + EMOJI_BASE_RANGE + ')' +
+  '(?:[\\uFE0E\\uFE0F]|[\\uD83C][\\uDFFB-\\uDFFF])?' +
+  '))*' +
+  ')';
+
+let SINGLE_EMOJI_REGEX: RegExp;
+let ALL_EMOJIS_REGEX: RegExp;
+
+try {
+  SINGLE_EMOJI_REGEX = new RegExp(`^${EMOJI_TOKEN_PATTERN}$`);
+  ALL_EMOJIS_REGEX = new RegExp(EMOJI_TOKEN_PATTERN, 'g');
+} catch {
+  // Ultra-resilient fallback
+  SINGLE_EMOJI_REGEX = /./;
+  ALL_EMOJIS_REGEX = /./g;
+}
 
 /**
  * Returns true if the string is exactly one emoji (compound emojis, flags, modifiers included).

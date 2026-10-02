@@ -102,21 +102,25 @@ export const originalNativeAlert = Alert.alert;
  * across the entire application instantly adopts Lumen's modern themed modal UI.
  */
 export function installGlobalAlert() {
-  Alert.alert = (
-    title: string,
-    message?: string,
-    buttons?: AlertButton[],
-    options?: AlertOptions
-  ) => {
-    const icon = inferAlertIcon(title, message, buttons);
-    useAlertStore.getState().showAlert({
-      title,
-      message,
-      buttons: buttons as AlertButtonConfig[] | undefined,
-      options,
-      icon,
-    });
-  };
+  try {
+    Alert.alert = (
+      title: string,
+      message?: string,
+      buttons?: AlertButton[],
+      options?: AlertOptions
+    ) => {
+      const icon = inferAlertIcon(title, message, buttons);
+      useAlertStore.getState().showAlert({
+        title,
+        message,
+        buttons: buttons as AlertButtonConfig[] | undefined,
+        options,
+        icon,
+      });
+    };
+  } catch (err) {
+    console.warn('[GlobalAlert] Could not override Alert.alert:', err);
+  }
 }
 
 /**

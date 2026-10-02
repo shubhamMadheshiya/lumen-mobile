@@ -1,14 +1,16 @@
 /**
  * DayView — vertical timeline for a single day.
  * Groups entries into hour buckets; draws a vertical line on the left.
- * Fully supports Quick Actions, custom units, and entry deletion.
+ * Fully supports Quick Actions, custom units, entry editing/deletion,
+ * and bulk Expand all / Collapse all toggle.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { Plus, ChevronDown, ChevronUp } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction } from '@lumen/shared';
 import { TimelineItem } from './TimelineItem';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
@@ -53,6 +55,14 @@ export function DayView({
   const { palette } = useTheme();
   const styles = useStyles();
 
+  // Bulk expand/collapse state: null = individual card preference, true = all expanded, false = all collapsed
+  const [allExpanded, setAllExpanded] = useState<boolean | null>(null);
+
+  const toggleAllExpanded = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAllExpanded(prev => (prev === false ? true : false));
+  };
+
   const buckets = useMemo<HourBucket[]>(() => {
     const map: Record<number, ILogEntry[]> = {};
     entries.forEach(e => {
@@ -60,53 +70,50 @@ export function DayView({
       if (!map[h]) map[h] = [];
       map[h].push(e);
     });
-    return Object.entries(map)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([h, items]) => ({
-        hour: Number(h),
-        label: toHourLabel(Number(h)),
-        entries: items.sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()),
+
+    return Object.keys(map)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map(hour => ({
+        hour,
+        label: toHourLabel(hour),
+        entries: map[hour].sort(
+          (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+        ),
       }));
   }, [entries]);
 
   const formattedDate = useMemo(() => {
-    const d = new Date(date + 'T12:00:00');
     const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     if (date === today) return 'Today';
-    if (date === yesterday) return 'Yesterday';
-    return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    const d = new Date(date + 'T12:00:00');
+    return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   }, [date]);
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={palette.primary} />
+        <ActivityIndicator size="small" color={palette.primary} />
       </View>
     );
   }
 
   if (entries.length === 0) {
-    const isToday = date === new Date().toISOString().slice(0, 10);
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyIcon}>📅</Text>
-        <Text style={styles.emptyText}>Nothing logged on {formattedDate}.</Text>
+        <Text style={styles.emptyIcon}>📝</Text>
+        <Text style={styles.emptyText}>No logs for this day</Text>
         <Text style={styles.emptyHint}>
-          {isToday
-            ? 'Track your symptoms, water, medications, or vitals for today.'
-            : 'No logs recorded for this day.'}
+          Track how you feel, your meals, or symptoms to see them on your timeline.
         </Text>
-        {isToday && (
-          <TouchableOpacity
-            style={styles.emptyAddBtn}
-            onPress={() => router.push('/(tabs)/today')}
-            activeOpacity={0.8}
-          >
-            <Plus size={16} color="#FFFFFF" />
-            <Text style={styles.emptyAddText}>Log an Activity</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.emptyAddBtn}
+          onPress={() => router.push('/log' as any)}
+          activeOpacity={0.8}
+        >
+          <Plus size={16} color="#FFFFFF" />
+          <Text style={styles.emptyAddText}>Log an entry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -114,10 +121,32 @@ export function DayView({
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.dateLabel}>{formattedDate}</Text>
-        <Text style={styles.countBadge}>
-          {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
-        </Text>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.dateLabel}>{formattedDate}</Text>
+          <Text style={styles.countBadge}>
+            {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+          </Text>
+        </View>
+
+        {/* Global Expand all / Collapse all toggle button */}
+        {entries.length > 0 && (
+          <TouchableOpacity
+            style={styles.expandAllBtn}
+            onPress={toggleAllExpanded}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={allExpanded === false ? 'Expand all logs' : 'Collapse all logs'}
+          >
+            <Text style={[styles.expandAllText, { color: palette.primary }]}>
+              {allExpanded === false ? 'Expand all' : 'Collapse all'}
+            </Text>
+            {allExpanded === false ? (
+              <ChevronDown size={14} color={palette.primary} />
+            ) : (
+              <ChevronUp size={14} color={palette.primary} />
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       {buckets.map((bucket, index) => (
@@ -135,7 +164,7 @@ export function DayView({
             {bucket.entries.map(entry => {
               const cat = categories.find(c => c._id === entry.categoryId);
               const q = questions.find(q => q._id === entry.questionId);
-              const opts = options.filter(o => entry.answers.some(a => a.optionId === o._id));
+              const opts = options.filter(o => entry.answers?.some(a => a.optionId === o._id));
               const qa = quickActions.find(q => q._id === entry.quickActionId);
 
               return (
@@ -148,6 +177,7 @@ export function DayView({
                   quickAction={qa}
                   onDelete={onDeleteEntry}
                   onEdit={onEditEntry}
+                  forceExpanded={allExpanded}
                 />
               );
             })}
@@ -196,6 +226,11 @@ const useStyles = createThemedStyles(palette => ({
     alignItems: 'center',
     marginBottom: 16,
   },
+  headerTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   dateLabel: { ...typography.h3, fontSize: 18, color: palette.text, fontWeight: '700' },
   countBadge: {
     ...typography.caption,
@@ -205,6 +240,22 @@ const useStyles = createThemedStyles(palette => ({
     paddingVertical: 4,
     borderRadius: 12,
     fontWeight: '700',
+  },
+  expandAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: palette.primary + '12',
+    borderWidth: 1,
+    borderColor: palette.primary + '28',
+  },
+  expandAllText: {
+    ...typography.caption,
+    fontWeight: '700',
+    fontSize: 11.5,
   },
   bucket: { marginBottom: 16 },
   firstBucket: { marginTop: 4 },

@@ -1,13 +1,13 @@
 /**
  * TimelineItem — renders a single LogEntry in the day timeline.
  * Features:
+ * - Expand / Collapse toggle for smooth scanning
  * - Direct visual anatomical Body Map preview with highlighted swelling/pain locations
  * - High-res Photo Gallery with privacy blur and fullscreen zoom
  * - Bristol stool type and severity scale visual formatting
  * - Dedicated Edit action and Delete action
- * - Expandable details toggle
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { Trash2, Pencil, ChevronDown, ChevronUp, Clock, FileText } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -26,6 +26,8 @@ interface Props {
   onPress?: () => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  defaultExpanded?: boolean;
+  forceExpanded?: boolean | null;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -61,9 +63,9 @@ function formatStoolType(val: unknown): string | null {
 
 function formatSeverity(val: unknown): { label: string; color: string } {
   const num = Number(val);
-  if (isNaN(num)) return { label: `${val}/10`, color: '#F59E0B' };
+  if (isNaN(num)) return { label: `${val}`, color: '#888' };
   if (num <= 3) return { label: `${num}/10 Mild`, color: '#10B981' };
-  if (num <= 6) return { label: `${num}/10 Moderate`, color: '#F59E0B' };
+  if (num <= 6) return { label: `${num}/10 Mod`, color: '#F59E0B' };
   return { label: `${num}/10 Severe`, color: '#EF4444' };
 }
 
@@ -76,11 +78,12 @@ export function TimelineItem({
   onPress,
   onEdit,
   onDelete,
+  defaultExpanded = true,
+  forceExpanded,
 }: Props) {
   const { palette, colorScheme } = useTheme();
   const styles = useStyles();
   const isDark = colorScheme === 'dark';
-  const [expanded, setExpanded] = useState(false);
 
   const isQuickAction = entry.source === 'quick_action' || !!entry.quickActionId;
   const title = isQuickAction
@@ -100,7 +103,7 @@ export function TimelineItem({
 
   // Extract all media and location fields across all answers
   const allFieldValues: { answerLabel: string; field: FieldValue }[] = [];
-  entry.answers.forEach((ans) => {
+  entry.answers?.forEach((ans) => {
     const opt = options.find((o) => o._id === ans.optionId);
     const label = ans.optionLabelSnapshot ?? opt?.label ?? 'Item';
     ans.values?.forEach((f) => {
@@ -113,6 +116,29 @@ export function TimelineItem({
   const standardFields = allFieldValues.filter(
     (f) => f.field.dataType !== 'location' && f.field.dataType !== 'image'
   );
+
+  const hasDetails =
+    locationFields.length > 0 ||
+    imageFields.length > 0 ||
+    standardFields.length > 0 ||
+    Boolean(entry.note);
+
+  // Expand / collapse state
+  const [localExpanded, setLocalExpanded] = useState<boolean | null>(null);
+
+  // Sync when parent changes forceExpanded
+  useEffect(() => {
+    if (forceExpanded !== undefined && forceExpanded !== null) {
+      setLocalExpanded(forceExpanded);
+    }
+  }, [forceExpanded]);
+
+  const isExpanded = localExpanded ?? defaultExpanded;
+
+  const toggleExpand = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLocalExpanded(!isExpanded);
+  };
 
   const handleDelete = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -138,6 +164,20 @@ export function TimelineItem({
     onEdit?.(entry._id);
   };
 
+  // Calculate counts for collapsed summary badges
+  const totalAreasCount = locationFields.reduce((sum, f) => {
+    const v = f.field.value;
+    if (Array.isArray(v)) return sum + v.length;
+    if (typeof v === 'string') return sum + v.split(',').length;
+    return sum + 1;
+  }, 0);
+
+  const totalPhotosCount = imageFields.reduce((sum, f) => {
+    const v = f.field.value;
+    if (Array.isArray(v)) return sum + v.length;
+    return sum + 1;
+  }, 0);
+
   return (
     <View style={styles.card}>
       {/* Category accent colour strip */}
@@ -145,7 +185,11 @@ export function TimelineItem({
 
       <View style={styles.body}>
         {/* Top Header Row */}
-        <View style={styles.topRow}>
+        <TouchableOpacity
+          style={styles.topRow}
+          onPress={hasDetails ? toggleExpand : onPress}
+          activeOpacity={hasDetails ? 0.75 : 1}
+        >
           <View style={styles.titleRow}>
             {icon ? <Text style={styles.catIcon}>{icon}</Text> : null}
             <Text style={styles.catName} numberOfLines={1}>
@@ -159,21 +203,40 @@ export function TimelineItem({
           </View>
 
           <View style={styles.metaRow}>
-            <Text style={styles.time}>{formatTime(entry.occurredAt)}</Text>
-            <Text
-              style={[
-                styles.sourceBadge,
-                {
-                  borderColor: accentColor + '44',
-                  color: accentColor,
-                  backgroundColor: accentColor + '12',
-                },
-              ]}
-            >
-              {SOURCE_LABEL[entry.source] ?? entry.source}
-            </Text>
+            <View style={styles.timeBadgeRow}>
+              <Text style={styles.time}>{formatTime(entry.occurredAt)}</Text>
+              <Text
+                style={[
+                  styles.sourceBadge,
+                  {
+                    borderColor: accentColor + '44',
+                    color: accentColor,
+                    backgroundColor: accentColor + '12',
+                  },
+                ]}
+              >
+                {SOURCE_LABEL[entry.source] ?? entry.source}
+              </Text>
+            </View>
+
+            {/* Expand / Collapse Chevron Button */}
+            {hasDetails && (
+              <TouchableOpacity
+                style={styles.chevronBtn}
+                onPress={toggleExpand}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={isExpanded ? 'Collapse entry' : 'Expand entry'}
+              >
+                {isExpanded ? (
+                  <ChevronUp size={16} color={palette.textSecondary} />
+                ) : (
+                  <ChevronDown size={16} color={palette.textSecondary} />
+                )}
+              </TouchableOpacity>
+            )}
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Quick action value pill */}
         {isQuickAction && quickValueText && (
@@ -192,7 +255,7 @@ export function TimelineItem({
         )}
 
         {/* Option Chips with Key Value Highlights */}
-        {entry.answers.length > 0 && (
+        {entry.answers && entry.answers.length > 0 && (
           <View style={styles.chips}>
             {entry.answers.map((ans, i) => {
               const opt = options.find((o) => o._id === ans.optionId);
@@ -201,7 +264,6 @@ export function TimelineItem({
                 opt?.label ??
                 (ans.optionId === '__other__' ? ans.otherText : 'Option');
 
-              // Find primary severity or stool type if present
               const rangeVal = ans.values?.find((v) => v.dataType === 'range');
               const stoolVal = ans.values?.find(
                 (v) =>
@@ -257,74 +319,143 @@ export function TimelineItem({
           </View>
         )}
 
-        {/* Rich Anatomical Body Map Previews for Swelling / Pain / Symptoms */}
-        {locationFields.map((loc, idx) => (
-          <BodyMapPreview
-            key={`loc-preview-${idx}`}
-            selectedKeys={loc.field.value as string[] | string}
-            fieldLabel={`${loc.answerLabel} • ${loc.field.fieldKey}`}
-          />
-        ))}
-
-        {/* Rich Photo Gallery for Stool, Skin, or Attached Images */}
-        {imageFields.map((img, idx) => (
-          <LogPhotoGallery
-            key={`img-gallery-${idx}`}
-            uris={img.field.value as string[] | string}
-            isSensitive={true}
-            fieldLabel={`${img.answerLabel} • Photo`}
-          />
-        ))}
-
-        {/* Standard text/numeric fields (e.g. Duration, Temperature) */}
-        {standardFields.length > 0 && (
-          <View style={styles.standardFieldsList}>
-            {standardFields.map((f, idx) => {
-              let displayVal = String(f.field.value);
-              if (f.field.dataType === 'temperature') {
-                displayVal = `${Number(f.field.value).toFixed(1)} °C`;
-              } else if (f.field.dataType === 'duration') {
-                const s = Number(f.field.value);
-                const h = Math.floor(s / 3600);
-                const m = Math.floor((s % 3600) / 60);
-                displayVal = h > 0 ? `${h}h ${m}m` : `${m}m`;
-              } else if (f.field.unit) {
-                displayVal = `${displayVal} ${f.field.unit}`;
-              }
-
-              return (
-                <View key={`std-${idx}`} style={styles.fieldLine}>
-                  <Text style={[styles.fieldKey, { color: palette.textSecondary }]}>
-                    {f.field.fieldKey}:
-                  </Text>
-                  <Text style={[styles.fieldVal, { color: palette.text }]}>{displayVal}</Text>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Notes callout block */}
-        {entry.note ? (
-          <View
+        {/* Collapsed State Summary Row (Shows indicators of hidden details) */}
+        {!isExpanded && hasDetails && (
+          <TouchableOpacity
             style={[
-              styles.noteBox,
+              styles.collapsedSummaryRow,
               {
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.025)',
-                borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)',
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
               },
             ]}
+            onPress={toggleExpand}
+            activeOpacity={0.8}
           >
-            <FileText size={13} color={palette.textSecondary} style={{ marginTop: 2 }} />
-            <Text style={[styles.noteText, { color: palette.textSecondary }]}>
-              {entry.note}
-            </Text>
-          </View>
-        ) : null}
+            <View style={styles.miniBadgesWrap}>
+              {locationFields.length > 0 && (
+                <View style={styles.miniBadge}>
+                  <Text style={styles.miniBadgeText}>🧍 {totalAreasCount} areas</Text>
+                </View>
+              )}
+              {imageFields.length > 0 && (
+                <View style={styles.miniBadge}>
+                  <Text style={styles.miniBadgeText}>
+                    📷 {totalPhotosCount} photo{totalPhotosCount > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              )}
+              {entry.note ? (
+                <View style={styles.miniBadge}>
+                  <Text style={styles.miniBadgeText}>📝 Note</Text>
+                </View>
+              ) : null}
+              {standardFields.length > 0 && (
+                <View style={styles.miniBadge}>
+                  <Text style={styles.miniBadgeText}>⚙️ {standardFields.length} metrics</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.expandPromptWrap}>
+              <Text style={[styles.expandPromptText, { color: palette.primary }]}>
+                Show details
+              </Text>
+              <ChevronDown size={12} color={palette.primary} />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Expanded Detailed Sections */}
+        {isExpanded && (
+          <>
+            {/* Rich Anatomical Body Map Previews for Swelling / Pain / Symptoms */}
+            {locationFields.map((loc, idx) => (
+              <BodyMapPreview
+                key={`loc-preview-${idx}`}
+                selectedKeys={loc.field.value as string[] | string}
+                fieldLabel={`${loc.answerLabel} • ${loc.field.fieldKey}`}
+              />
+            ))}
+
+            {/* Rich Photo Gallery for Stool, Skin, or Attached Images */}
+            {imageFields.map((img, idx) => (
+              <LogPhotoGallery
+                key={`img-gallery-${idx}`}
+                uris={img.field.value as string[] | string}
+                isSensitive={true}
+                fieldLabel={`${img.answerLabel} • Photo`}
+              />
+            ))}
+
+            {/* Standard text/numeric fields (e.g. Duration, Temperature) */}
+            {standardFields.length > 0 && (
+              <View style={styles.standardFieldsList}>
+                {standardFields.map((f, idx) => {
+                  let displayVal = String(f.field.value);
+                  if (f.field.dataType === 'temperature') {
+                    displayVal = `${Number(f.field.value).toFixed(1)} °C`;
+                  } else if (f.field.dataType === 'duration') {
+                    const s = Number(f.field.value);
+                    const h = Math.floor(s / 3600);
+                    const m = Math.floor((s % 3600) / 60);
+                    displayVal = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                  } else if (f.field.unit) {
+                    displayVal = `${displayVal} ${f.field.unit}`;
+                  }
+
+                  return (
+                    <View key={`std-${idx}`} style={styles.fieldLine}>
+                      <Text style={[styles.fieldKey, { color: palette.textSecondary }]}>
+                        {f.field.fieldKey}:
+                      </Text>
+                      <Text style={[styles.fieldVal, { color: palette.text }]}>{displayVal}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Notes callout block */}
+            {entry.note ? (
+              <View
+                style={[
+                  styles.noteBox,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.025)',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)',
+                  },
+                ]}
+              >
+                <FileText size={13} color={palette.textSecondary} style={{ marginTop: 2 }} />
+                <Text style={[styles.noteText, { color: palette.textSecondary }]}>
+                  {entry.note}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        )}
 
         {/* Bottom Actions Bar (Edit & Delete) */}
         <View style={styles.bottomBar}>
-          <View style={{ flex: 1 }} />
+          {hasDetails ? (
+            <TouchableOpacity
+              style={styles.collapseToggleBtn}
+              onPress={toggleExpand}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Text style={[styles.collapseToggleText, { color: palette.textSecondary }]}>
+                {isExpanded ? 'Collapse details' : 'Expand details'}
+              </Text>
+              {isExpanded ? (
+                <ChevronUp size={12} color={palette.textSecondary} />
+              ) : (
+                <ChevronDown size={12} color={palette.textSecondary} />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
 
           <View style={styles.actionsGroup}>
             {/* Edit Button */}
@@ -364,7 +495,7 @@ export function TimelineItem({
                 accessibilityLabel="Delete log entry"
               >
                 <Trash2 size={13} color="#EF4444" strokeWidth={2} />
-                <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete</Text>
+                <Text style={[styles.actionBtnText, { color: "#EF4444" }]}>Delete</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -424,8 +555,13 @@ const useStyles = createThemedStyles((palette) => ({
     flex: 1,
   },
   metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeBadgeRow: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 3,
   },
   time: {
     ...typography.caption,
@@ -441,6 +577,11 @@ const useStyles = createThemedStyles((palette) => ({
     paddingVertical: 1.5,
     fontSize: 10,
     fontWeight: '700',
+  },
+  chevronBtn: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   chips: {
     flexDirection: 'row',
@@ -484,6 +625,48 @@ const useStyles = createThemedStyles((palette) => ({
     fontSize: 10,
     fontWeight: '700',
   },
+
+  // Collapsed summary preview
+  collapsedSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 2,
+  },
+  miniBadgesWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    flex: 1,
+  },
+  miniBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  miniBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: palette.textSecondary,
+  },
+  expandPromptWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingLeft: 6,
+  },
+  expandPromptText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // Expanded fields
   standardFieldsList: {
     gap: 3,
     marginTop: 4,
@@ -525,6 +708,17 @@ const useStyles = createThemedStyles((palette) => ({
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  collapseToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  collapseToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   actionsGroup: {
     flexDirection: 'row',

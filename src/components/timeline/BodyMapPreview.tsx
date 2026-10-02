@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import Svg, { Ellipse, Rect, G } from 'react-native-svg';
-import { Maximize2, X, MapPin } from 'lucide-react-native';
+import { Maximize2, X, MapPin, ChevronDown, ChevronUp } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 
@@ -48,11 +49,17 @@ const REGION_MAP = new Map(REGIONS.map((r) => [r.key, r.label]));
 interface Props {
   selectedKeys?: string[] | string;
   fieldLabel?: string;
+  defaultExpanded?: boolean;
 }
 
-export function BodyMapPreview({ selectedKeys, fieldLabel = 'Location' }: Props) {
+export function BodyMapPreview({
+  selectedKeys,
+  fieldLabel = 'Location',
+  defaultExpanded = true,
+}: Props) {
   const { palette, colorScheme } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   const keys: string[] = Array.isArray(selectedKeys)
     ? selectedKeys
@@ -65,10 +72,15 @@ export function BodyMapPreview({ selectedKeys, fieldLabel = 'Location' }: Props)
   const isDark = colorScheme === 'dark';
   const defaultFill = isDark ? '#2E2921' : '#E8E0D8';
   const defaultStroke = isDark ? '#3D352C' : '#D0C8BF';
-  const highlightFill = palette.primary; // e.g. #FF7D4D / #FF6B35
+  const highlightFill = palette.primary;
   const highlightStroke = isDark ? '#FFA726' : '#EF5350';
 
   const labels = keys.map((k) => REGION_MAP.get(k) || k);
+
+  const toggleExpand = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsExpanded((prev) => !prev);
+  };
 
   const renderSilhouette = (width: number, height: number, strokeWidth: number = 1.2) => (
     <Svg width={width} height={height} viewBox="15 15 170 350">
@@ -115,62 +127,127 @@ export function BodyMapPreview({ selectedKeys, fieldLabel = 'Location' }: Props)
 
   return (
     <View style={styles.container}>
+      {/* Header with expand / collapse and fullscreen actions */}
       <View style={styles.headerRow}>
-        <View style={styles.labelRow}>
+        <TouchableOpacity
+          style={styles.labelRow}
+          onPress={toggleExpand}
+          activeOpacity={0.7}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
           <MapPin size={13} color={palette.primary} />
           <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>
             {fieldLabel} ({keys.length})
           </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.expandBtn}
-          onPress={() => setModalVisible(true)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Enlarge body map"
-        >
-          <Text style={[styles.expandText, { color: palette.primary }]}>View</Text>
-          <Maximize2 size={11} color={palette.primary} />
+          {isExpanded ? (
+            <ChevronUp size={14} color={palette.textSecondary} />
+          ) : (
+            <ChevronDown size={14} color={palette.textSecondary} />
+          )}
         </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.toggleTextBtn}
+            onPress={toggleExpand}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text style={[styles.toggleText, { color: palette.textSecondary }]}>
+              {isExpanded ? 'Collapse' : 'Expand'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.expandBtn}
+            onPress={() => setModalVisible(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Enlarge body map"
+          >
+            <Text style={[styles.expandText, { color: palette.primary }]}>View</Text>
+            <Maximize2 size={11} color={palette.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <TouchableOpacity
-        style={[
-          styles.previewCard,
-          {
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.025)',
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-          },
-        ]}
-        onPress={() => setModalVisible(true)}
-        activeOpacity={0.85}
-      >
-        {/* Silhouette on the left */}
-        <View style={styles.silhouetteWrap}>{renderSilhouette(64, 115, 1.2)}</View>
-
-        {/* Region Tags on the right */}
-        <View style={styles.tagsContainer}>
-          <Text style={[styles.tagsHeading, { color: palette.text }]}>Affected Regions:</Text>
-          <View style={styles.tagsRow}>
-            {labels.map((lbl, idx) => (
+      {/* Collapsed Compact View */}
+      {!isExpanded && (
+        <TouchableOpacity
+          style={[
+            styles.compactBar,
+            {
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.025)',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)',
+            },
+          ]}
+          onPress={toggleExpand}
+          activeOpacity={0.8}
+        >
+          <View style={styles.compactTagsRow}>
+            {labels.slice(0, 3).map((lbl, idx) => (
               <View
-                key={`${lbl}-${idx}`}
+                key={`compact-${lbl}-${idx}`}
                 style={[
-                  styles.tag,
+                  styles.compactChip,
                   {
-                    backgroundColor: isDark ? 'rgba(255, 125, 77, 0.16)' : 'rgba(255, 107, 53, 0.1)',
-                    borderColor: isDark ? 'rgba(255, 125, 77, 0.35)' : 'rgba(255, 107, 53, 0.25)',
+                    backgroundColor: isDark ? 'rgba(255, 125, 77, 0.14)' : 'rgba(255, 107, 53, 0.09)',
+                    borderColor: isDark ? 'rgba(255, 125, 77, 0.3)' : 'rgba(255, 107, 53, 0.2)',
                   },
                 ]}
               >
                 <View style={[styles.tagDot, { backgroundColor: palette.primary }]} />
-                <Text style={[styles.tagText, { color: palette.text }]}>{lbl}</Text>
+                <Text style={[styles.compactChipText, { color: palette.text }]}>{lbl}</Text>
               </View>
             ))}
+            {labels.length > 3 && (
+              <Text style={[styles.moreCountText, { color: palette.textSecondary }]}>
+                +{labels.length - 3} more
+              </Text>
+            )}
           </View>
-        </View>
-      </TouchableOpacity>
+          <Text style={[styles.showMapPrompt, { color: palette.primary }]}>Show Map</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Expanded Anatomical Silhouette Card */}
+      {isExpanded && (
+        <TouchableOpacity
+          style={[
+            styles.previewCard,
+            {
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.025)',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+            },
+          ]}
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          {/* Silhouette on the left */}
+          <View style={styles.silhouetteWrap}>{renderSilhouette(64, 115, 1.2)}</View>
+
+          {/* Region Tags on the right */}
+          <View style={styles.tagsContainer}>
+            <Text style={[styles.tagsHeading, { color: palette.text }]}>Affected Regions:</Text>
+            <View style={styles.tagsRow}>
+              {labels.map((lbl, idx) => (
+                <View
+                  key={`${lbl}-${idx}`}
+                  style={[
+                    styles.tag,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 125, 77, 0.16)' : 'rgba(255, 107, 53, 0.1)',
+                      borderColor: isDark ? 'rgba(255, 125, 77, 0.35)' : 'rgba(255, 107, 53, 0.25)',
+                    },
+                  ]}
+                >
+                  <View style={[styles.tagDot, { backgroundColor: palette.primary }]} />
+                  <Text style={[styles.tagText, { color: palette.text }]}>{lbl}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Fullscreen Detailed Body Modal */}
       <Modal
@@ -256,6 +333,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 12,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toggleTextBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  toggleText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
   expandBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -267,6 +357,43 @@ const styles = StyleSheet.create({
   expandText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  compactBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  compactTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+    flex: 1,
+  },
+  compactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  compactChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  moreCountText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  showMapPrompt: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 6,
   },
   previewCard: {
     flexDirection: 'row',

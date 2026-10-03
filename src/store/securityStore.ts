@@ -5,6 +5,7 @@
  * 2. Persistent App Lock preference ('lumen:security:app_lock').
  * 3. App lock / unlock state transitions upon app startup and foregrounding.
  */
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -49,12 +50,21 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       ]);
 
       let biometricType: 'FACE' | 'FINGERPRINT' | 'IRIS' | 'BIOMETRICS' = 'BIOMETRICS';
-      if (supportedTypes.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
-        biometricType = 'FACE';
-      } else if (supportedTypes.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
-        biometricType = 'FINGERPRINT';
-      } else if (supportedTypes.includes(LocalAuthentication.AuthenticationType.IRIS)) {
-        biometricType = 'IRIS';
+      if (Platform.OS === 'ios') {
+        if (supportedTypes.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+          biometricType = 'FACE';
+        } else if (supportedTypes.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+          biometricType = 'FINGERPRINT';
+        }
+      } else {
+        // Android / other: prefer FINGERPRINT when available
+        if (supportedTypes.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+          biometricType = 'FINGERPRINT';
+        } else if (supportedTypes.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+          biometricType = 'FACE';
+        } else if (supportedTypes.includes(LocalAuthentication.AuthenticationType.IRIS)) {
+          biometricType = 'IRIS';
+        }
       }
 
       const isEnabled = savedLockPref === 'true';

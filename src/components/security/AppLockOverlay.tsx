@@ -10,8 +10,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { ShieldCheck, Fingerprint, Lock, LogOut } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Fingerprint, Lock, LogOut } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
@@ -48,12 +51,19 @@ export function AppLockOverlay() {
     router.replace('/(auth)/login');
   };
 
-  const biometricLabel =
-    biometricType === 'FACE'
-      ? 'Unlock with Face ID'
-      : biometricType === 'FINGERPRINT'
-      ? 'Unlock with Fingerprint'
-      : 'Unlock with Biometrics or Passcode';
+  const biometricLabel = (() => {
+    if (Platform.OS === 'ios') {
+      if (biometricType === 'FACE') return 'Unlock with Face ID';
+      if (biometricType === 'FINGERPRINT') return 'Unlock with Touch ID';
+      return 'Unlock with Biometrics';
+    }
+    // Android / other
+    if (biometricType === 'FINGERPRINT') return 'Unlock with Fingerprint';
+    if (biometricType === 'FACE') return 'Unlock with Face Recognition';
+    return 'Unlock with Biometrics';
+  })();
+
+  const BiometricIcon = biometricType === 'FACE' && Platform.OS === 'ios' ? Lock : Fingerprint;
 
   return (
     <Modal
@@ -62,18 +72,26 @@ export function AppLockOverlay() {
       transparent={false}
       statusBarTranslucent
     >
-      <View style={[styles.container, { backgroundColor: palette.background }]}>
-        {/* Decorative ambient glow */}
-        <View
-          style={[
-            styles.glowCircle,
-            { backgroundColor: palette.primary + '18' },
-          ]}
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: palette.background }]}
+        edges={['top', 'bottom']}
+      >
+        {/* Soft, seamless ambient gradient background without any sharp circles */}
+        <LinearGradient
+          colors={[palette.primary + '22', palette.primary + '06', 'transparent']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 0.65 }}
+          pointerEvents="none"
         />
 
+        {/* Top spacer to balance layout vertically */}
+        <View style={styles.topSpacer} />
+
+        {/* Main centered content */}
         <View style={styles.centerContent}>
-          {/* Lumen App Emblem */}
-          <LumenLogo variant="badge" size={80} style={styles.logoBadge} />
+          {/* Official Lumen Badge */}
+          <LumenLogo variant="badge" size={84} style={styles.logoBadge} />
 
           <Text style={[styles.title, { color: palette.text }]}>Lumen is Locked</Text>
           <Text style={[styles.subtitle, { color: palette.textSecondary }]}>
@@ -81,7 +99,7 @@ export function AppLockOverlay() {
           </Text>
 
           {authError ? (
-            <View style={[styles.errorBox, { backgroundColor: palette.error + '14', borderColor: palette.error + '33' }]}>
+            <View style={[styles.errorBox, { backgroundColor: palette.error + '14', borderColor: palette.error + '38' }]}>
               <Text style={[styles.errorText, { color: palette.error }]}>{authError}</Text>
             </View>
           ) : null}
@@ -97,7 +115,7 @@ export function AppLockOverlay() {
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <>
-                <Fingerprint size={22} color="#FFFFFF" strokeWidth={2.2} />
+                <BiometricIcon size={22} color="#FFFFFF" strokeWidth={2.2} />
                 <Text style={styles.unlockButtonText}>{biometricLabel}</Text>
               </>
             )}
@@ -108,10 +126,10 @@ export function AppLockOverlay() {
           </Text>
         </View>
 
-        {/* Footer Emergency Action */}
+        {/* Footer Emergency Action with safe margin */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.logoutBtn, { borderColor: palette.border }]}
+            style={[styles.logoutBtn, { borderColor: palette.border, backgroundColor: palette.surface + '66' }]}
             onPress={handleLogoutPress}
             activeOpacity={0.7}
           >
@@ -119,7 +137,7 @@ export function AppLockOverlay() {
             <Text style={[styles.logoutText, { color: palette.textSecondary }]}>Log Out of Account</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -127,36 +145,17 @@ export function AppLockOverlay() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 28,
   },
-  glowCircle: {
-    position: 'absolute',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    top: '22%',
-    alignSelf: 'center',
+  topSpacer: {
+    height: 32,
   },
   centerContent: {
     width: '100%',
     maxWidth: 380,
     alignItems: 'center',
-  },
-  emblemContainer: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
   },
   logoBadge: {
     marginBottom: 20,
@@ -178,9 +177,9 @@ const styles = StyleSheet.create({
   },
   errorBox: {
     width: '100%',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     borderWidth: 1,
     marginBottom: 20,
     alignItems: 'center',
@@ -217,8 +216,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   footer: {
-    position: 'absolute',
-    bottom: 40,
+    marginBottom: 20,
     alignSelf: 'center',
   },
   logoutBtn: {
@@ -226,7 +224,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     borderRadius: 9999,
     borderWidth: 1,
   },

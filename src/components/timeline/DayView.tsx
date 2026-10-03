@@ -16,6 +16,7 @@ import { TimelineItem } from './TimelineItem';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 import { PressableScale } from '../common/PressableScale';
+import { toLocalDateString } from '../../hooks/useTimelineSummary';
 
 interface Props {
   date: string; // 'YYYY-MM-DD'
@@ -85,9 +86,12 @@ export function DayView({
   }, [entries]);
 
   const formattedDate = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toLocalDateString(new Date());
     if (date === today) return 'Today';
-    const d = new Date(date + 'T12:00:00');
+    const parts = (date || '').split('-');
+    const d = parts.length === 3
+      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+      : new Date();
     return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   }, [date]);
 

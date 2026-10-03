@@ -23,13 +23,11 @@ import * as Haptics from 'expo-haptics';
 import { useConfigStore } from '../../src/store/configStore';
 import { CalendarHeatMap } from '../../src/components/timeline/CalendarHeatMap';
 import { DayView } from '../../src/components/timeline/DayView';
-import { useTimelineSummary, useDayEntries } from '../../src/hooks/useTimelineSummary';
+import { useTimelineSummary, useDayEntries, toLocalDateString } from '../../src/hooks/useTimelineSummary';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { api } from '../../src/api/client';
 import { PressableScale } from '../../src/components/common/PressableScale';
-
-function toISO(d: Date) { return d.toISOString().slice(0, 10); }
 
 type TypeFilter = 'all' | 'detailed' | 'quick' | 'photos' | 'bodymap';
 
@@ -37,11 +35,11 @@ export default function TimelineScreen() {
   const { palette } = useTheme();
   const styles = useStyles();
   const queryClient = useQueryClient();
-  const today = toISO(new Date());
 
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [calYear, setCalYear] = useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [today, setToday] = useState(() => toLocalDateString());
+  const [selectedDate, setSelectedDate] = useState(() => toLocalDateString());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [showCalendar, setShowCalendar] = useState(true);
   const [calViewMode, setCalViewMode] = useState<'week' | 'month'>('week');
 
@@ -61,17 +59,44 @@ export default function TimelineScreen() {
   // Automatically update timeline data from API whenever user switches to the Timeline tab
   useFocusEffect(
     useCallback(() => {
+      const now = new Date();
+      const curToday = toLocalDateString(now);
+
+      setToday(prevToday => {
+        if (prevToday !== curToday) {
+          // If the day rolled over and user was looking at previous today, advance to new today
+          setSelectedDate(prevSel => (prevSel === prevToday ? curToday : prevSel));
+          setCalYear(now.getFullYear());
+          setCalMonth(now.getMonth());
+        }
+        return curToday;
+      });
+
+      // Invalidate queries so TanStack Query marks all timeline day entries & summaries as stale
+      queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+
+      // Trigger immediate network refetches
       refetchSummary();
       refetchEntries();
-    }, [refetchSummary, refetchEntries])
+
+      // Refresh config in background to pick up newly added questions/categories/quick-actions
+      useConfigStore.getState().fetchConfig().catch(() => {});
+    }, [queryClient, refetchSummary, refetchEntries])
   );
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.allSettled([refetchSummary(), refetchEntries()]);
+    await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ['timeline-summary'] }),
+      queryClient.invalidateQueries({ queryKey: ['day-entries'] }),
+      refetchSummary(),
+      refetchEntries(),
+      useConfigStore.getState().fetchConfig(),
+    ]);
     setRefreshing(false);
-  }, [refetchSummary, refetchEntries]);
+  }, [queryClient, refetchSummary, refetchEntries]);
 
   const categories = config?.categories ?? [];
   const questions = config?.questions ?? [];
@@ -94,35 +119,49 @@ export default function TimelineScreen() {
 
   const jumpToDate = (date: string) => {
     setSelectedDate(date);
-    const d = new Date(date + 'T12:00:00');
-    setCalYear(d.getFullYear());
-    setCalMonth(d.getMonth());
+    const parts = (date || '').split('-');
+    if (parts.length === 3) {
+      setCalYear(parseInt(parts[0], 10));
+      setCalMonth(parseInt(parts[1], 10) - 1);
+    }
   };
 
   const prevWeek = useCallback(() => {
-    const d = new Date(selectedDate + 'T12:00:00');
+    const parts = (selectedDate || '').split('-');
+    const d = parts.length === 3
+      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+      : new Date();
     d.setDate(d.getDate() - 7);
-    jumpToDate(toISO(d));
+    jumpToDate(toLocalDateString(d));
   }, [selectedDate]);
 
   const nextWeek = useCallback(() => {
-    const d = new Date(selectedDate + 'T12:00:00');
+    const parts = (selectedDate || '').split('-');
+    const d = parts.length === 3
+      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+      : new Date();
     d.setDate(d.getDate() + 7);
-    const next = toISO(d);
+    const next = toLocalDateString(d);
     if (next <= today) jumpToDate(next);
   }, [selectedDate, today]);
 
   // Swipe between days via arrow buttons
   const prevDay = () => {
-    const d = new Date(selectedDate + 'T12:00:00');
+    const parts = (selectedDate || '').split('-');
+    const d = parts.length === 3
+      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+      : new Date();
     d.setDate(d.getDate() - 1);
-    jumpToDate(toISO(d));
+    jumpToDate(toLocalDateString(d));
   };
 
   const nextDay = () => {
-    const d = new Date(selectedDate + 'T12:00:00');
+    const parts = (selectedDate || '').split('-');
+    const d = parts.length === 3
+      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+      : new Date();
     d.setDate(d.getDate() + 1);
-    const next = toISO(d);
+    const next = toLocalDateString(d);
     if (next <= today) jumpToDate(next);
   };
 
@@ -237,8 +276,10 @@ export default function TimelineScreen() {
   const handleDeleteEntry = async (id: string) => {
     try {
       await api.delete(`/logs/${id}`);
-      queryClient.invalidateQueries({ queryKey: ['day-entries', selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ['day-entries'] });
       queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+      refetchEntries();
+      refetchSummary();
     } catch {
       Alert.alert('Error', 'Failed to delete log entry.');
     }
@@ -318,11 +359,17 @@ export default function TimelineScreen() {
             <Text style={styles.dayLabel}>
               {isToday
                 ? `Today • ${new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`
-                : new Date(selectedDate + 'T12:00:00').toLocaleDateString(undefined, {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                : (() => {
+                    const parts = (selectedDate || '').split('-');
+                    const d = parts.length === 3
+                      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+                      : new Date();
+                    return d.toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    });
+                  })()}
             </Text>
             {!isToday && (
               <PressableScale

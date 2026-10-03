@@ -7,11 +7,35 @@ import { api } from '../api/client';
 import { ILogEntry } from '@lumen/shared';
 import { DaySeverity } from '../components/timeline/CalendarHeatMap';
 
-function toISO(d: Date) { return d.toISOString().slice(0, 10); }
+export function toLocalDateString(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function parseLocalDate(dateStr: string): { startOfDay: Date; endOfDay: Date } {
+  if (!dateStr || !dateStr.includes('-')) {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return { startOfDay, endOfDay };
+  }
+  const parts = dateStr.split('-');
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+
+  const startOfDay = new Date(y, m, d, 0, 0, 0, 0);
+  const endOfDay = new Date(y, m, d, 23, 59, 59, 999);
+  return { startOfDay, endOfDay };
+}
 
 export function useTimelineSummary(year: number, month: number) {
-  const from = new Date(year, month, 1).toISOString();
-  const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+  const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+  const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
+  const from = startOfMonth.toISOString();
+  const to = endOfMonth.toISOString();
 
   return useQuery<DaySeverity[]>({
     queryKey: ['timeline-summary', year, month],
@@ -21,7 +45,7 @@ export function useTimelineSummary(year: number, month: number) {
 
       const map: Record<string, { maxSeverity: number; hasLogs: boolean }> = {};
       for (const e of entries) {
-        const day = toISO(new Date(e.occurredAt));
+        const day = toLocalDateString(new Date(e.occurredAt));
         if (!map[day]) map[day] = { maxSeverity: -1, hasLogs: true };
         map[day].hasLogs = true;
         for (const ans of (e.answers || [])) {
@@ -37,26 +61,27 @@ export function useTimelineSummary(year: number, month: number) {
 
       return Object.entries(map).map(([date, info]) => ({ date, ...info }));
     },
-    staleTime: 15 * 1000,
+    staleTime: 0,
     refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: 'always',
   });
 }
 
 export function useDayEntries(date: string) {
-  const d = new Date(date + 'T00:00:00');
-  const from = d.toISOString();
-  const toDate = new Date(date + 'T23:59:59');
-  const to = toDate.toISOString();
+  const { startOfDay, endOfDay } = parseLocalDate(date);
+  const from = startOfDay.toISOString();
+  const to = endOfDay.toISOString();
 
   return useQuery<ILogEntry[]>({
     queryKey: ['day-entries', date],
     queryFn: async () => {
+      if (!date) return [];
       const res = await api.get<any>('/logs', { params: { from, to, limit: 500 } });
       return Array.isArray(res) ? res : (res?.logs ?? res?.data ?? []);
     },
     staleTime: 0,
     refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: 'always',
   });
 }
+

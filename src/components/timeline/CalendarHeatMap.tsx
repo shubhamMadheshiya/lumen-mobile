@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 import { PressableScale } from '../common/PressableScale';
+import { toLocalDateString } from '../../hooks/useTimelineSummary';
 
 export interface DaySeverity {
   date: string; // 'YYYY-MM-DD'
@@ -80,7 +81,10 @@ export function CalendarHeatMap({
 
   // Week strip cells (Monday to Sunday containing selectedDate)
   const weekDays = useMemo(() => {
-    const selectedD = new Date(selectedDate + 'T12:00:00');
+    const parts = (selectedDate || '').split('-');
+    const selectedD = parts.length === 3
+      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+      : new Date();
     const dayOfWeek = (selectedD.getDay() + 6) % 7; // 0 = Mon, 6 = Sun
     const monday = new Date(selectedD);
     monday.setDate(monday.getDate() - dayOfWeek);
@@ -88,7 +92,7 @@ export function CalendarHeatMap({
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(d.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
+      const iso = toLocalDateString(d);
       return {
         dayNum: d.getDate(),
         iso,
@@ -97,7 +101,7 @@ export function CalendarHeatMap({
     });
   }, [selectedDate]);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalDateString(new Date());
 
   const isoDate = (day: number) =>
     `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;

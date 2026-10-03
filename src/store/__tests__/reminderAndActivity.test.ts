@@ -25,6 +25,7 @@ jest.mock('../../services/locationService', () => ({
     pauseTracking: jest.fn().mockResolvedValue(undefined),
     resumeTracking: jest.fn().mockResolvedValue(true),
     stopTracking: jest.fn().mockResolvedValue({ distanceMeters: 3420, steps: 4820 }),
+    getBackgroundLocation: jest.fn().mockResolvedValue(null),
   },
 }));
 

@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import Svg, { Circle } from 'react-native-svg';
 import {
   Footprints,
   Play,
@@ -166,6 +167,134 @@ export default function TodayScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/walking/active');
   };
+
+  const otherGlanceCards = useMemo<GlanceItem[]>(() => {
+    const cards: GlanceItem[] = [];
+
+    // 1. Reminders (Purple border - matches top right card in reference design)
+    if (isMetricEnabled('reminders')) {
+      cards.push({
+        id: 'reminders',
+        icon: Bell,
+        value: `${reminders.filter(r => r.enabled).length} active`,
+        label: 'Reminders',
+        subtitle: reminders.length > 0 ? `${reminders.length} total` : 'None set',
+        color: '#9333EA',
+        onPress: () => router.push('/reminders?mode=reminders'),
+      });
+    }
+
+    // 2. Walking (Orange border - matches bottom right card in reference design)
+    if (isMetricEnabled('walking')) {
+      cards.push({
+        id: 'walking',
+        icon: Footprints,
+        value: `${todayDistanceKm.toFixed(1)} km`,
+        label: 'Walking',
+        subtitle: isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`,
+        color: '#EA580C',
+        onPress: handleStartWalking,
+      });
+    }
+
+    // 3. Quick taps (Rose border)
+    if (isMetricEnabled('quick_logs')) {
+      cards.push({
+        id: 'quick_logs',
+        icon: Stethoscope,
+        value: `${totalTapCount} logged`,
+        label: 'Quick taps',
+        subtitle: `${distinctTapCount} metrics`,
+        color: '#E11D48',
+        onPress: () => router.push('/(tabs)/timeline'),
+      });
+    }
+
+    // 4. Sleep session (Indigo border)
+    if (isMetricEnabled('day_session')) {
+      cards.push({
+        id: 'day_session',
+        icon: isSleeping ? Moon : (lastSleepRecord ? Moon : (wakeTimeStr ? Sun : Moon)),
+        value: isSleeping
+          ? 'In bed'
+          : lastSleepRecord
+            ? `${Math.floor(lastSleepRecord.durationMinutes / 60)}h ${lastSleepRecord.durationMinutes % 60}m`
+            : (wakeTimeStr || 'Clock in'),
+        label: 'Sleep session',
+        subtitle: isSleeping
+          ? 'Sleeping now'
+          : lastSleepRecord
+            ? (lastSleepRecord.durationMinutes >= 420 ? '7–8h goal met' : 'Under 7h goal')
+            : (todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')),
+        color: isSleeping
+          ? '#6366F1'
+          : lastSleepRecord?.durationMinutes && lastSleepRecord.durationMinutes >= 420
+            ? '#10B981'
+            : '#6366F1',
+        onPress: () => {
+          if (isDaytimeMode) {
+            router.push('/settings');
+          } else {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+          }
+        },
+      });
+    }
+
+    // 5. Active time (Cyan border)
+    if (isMetricEnabled('active_time')) {
+      cards.push({
+        id: 'active_time',
+        icon: Timer,
+        value: `${todayWalkingMinutes}m`,
+        label: 'Active time',
+        subtitle: todayWalkingMinutes > 0 ? 'Today' : 'Start now',
+        color: '#0EA5E9',
+        onPress: handleStartWalking,
+      });
+    }
+
+    // 6. Custom Quick Actions with daily goals
+    customGoalActions.forEach(action => {
+      const count = todayTaps[action._id]?.count ?? 0;
+      const target = action.dailyGoal ? Math.round(action.dailyGoal / (action.defaultValue ?? 1)) : 1;
+      cards.push({
+        id: action._id,
+        emoji: action.icon || '🎯',
+        value: `${count}/${target}`,
+        label: action.label,
+        subtitle: `${Math.min(100, Math.round((count / target) * 100))}% goal`,
+        color: action.color || palette.primary,
+        onPress: () => router.push('/log'),
+      });
+    });
+
+    return cards;
+  }, [
+    isMetricEnabled,
+    reminders,
+    todayDistanceKm,
+    isTracking,
+    todayWalkingMinutes,
+    totalTapCount,
+    distinctTapCount,
+    isSleeping,
+    lastSleepRecord,
+    wakeTimeStr,
+    todaySession,
+    isDaytimeMode,
+    customGoalActions,
+    todayTaps,
+    palette.primary,
+  ]);
+
+  const glanceColumns = useMemo(() => {
+    const cols: GlanceItem[][] = [];
+    for (let i = 0; i < otherGlanceCards.length; i += 2) {
+      cols.push(otherGlanceCards.slice(i, i + 2));
+    }
+    return cols;
+  }, [otherGlanceCards]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -362,131 +491,58 @@ export default function TodayScreen() {
             </View>
           </View>
 
-          <View style={styles.glanceGrid}>
-            {isMetricEnabled('water') && (
-              <GlanceCard
-                icon={Droplets}
-                value={`${waterCount}/${waterGoal}`}
-                label="Water"
-                subtitle={waterGoal ? `${Math.min(100, Math.round((waterCount / waterGoal) * 100))}% goal` : undefined}
-                color={palette.secondary}
-                onPress={() => {
-                  setSelectedWaterActionId(waterAction?._id);
-                  setWaterModalVisible(true);
-                }}
-              />
-            )}
-
-            {isMetricEnabled('walking') && (
-              <GlanceCard
-                icon={Footprints}
-                value={`${todayDistanceKm.toFixed(1)} km`}
-                label="Walking"
-                subtitle={isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`}
-                color={palette.primary}
-                onPress={handleStartWalking}
-              />
-            )}
-
-            {isMetricEnabled('reminders') && (
-              <GlanceCard
-                icon={Bell}
-                value={`${reminders.filter(r => r.enabled).length} active`}
-                label="Reminders"
-                subtitle={reminders.length > 0 ? `${reminders.length} total` : 'None set'}
-                color={palette.catMood}
-                onPress={() => router.push('/reminders?mode=reminders')}
-              />
-            )}
-
-            {isMetricEnabled('quick_logs') && (
-              <GlanceCard
-                icon={Stethoscope}
-                value={`${totalTapCount} logged`}
-                label="Quick taps"
-                subtitle={`${distinctTapCount} metrics`}
-                color={palette.catSymptom}
-                onPress={() => router.push('/(tabs)/timeline')}
-              />
-            )}
-
-            {isMetricEnabled('day_session') && (
-              <GlanceCard
-                icon={isSleeping ? Moon : (lastSleepRecord ? Moon : (wakeTimeStr ? Sun : Moon))}
-                value={
-                  isSleeping
-                    ? 'In bed'
-                    : lastSleepRecord
-                      ? `${Math.floor(lastSleepRecord.durationMinutes / 60)}h ${lastSleepRecord.durationMinutes % 60}m`
-                      : (wakeTimeStr || 'Clock in')
-                }
-                label="Sleep session"
-                subtitle={
-                  isSleeping
-                    ? 'Sleeping now'
-                    : lastSleepRecord
-                      ? (lastSleepRecord.durationMinutes >= 420 ? '7–8h goal met' : 'Under 7h goal')
-                      : (todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started'))
-                }
-                color={
-                  isSleeping
-                    ? '#6366F1'
-                    : lastSleepRecord?.durationMinutes && lastSleepRecord.durationMinutes >= 420
-                      ? '#10B981'
-                      : palette.catHabits
-                }
-                onPress={() => {
-                  if (isDaytimeMode) {
-                    router.push('/settings');
-                  } else {
-                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-                  }
-                }}
-              />
-            )}
-
-            {isMetricEnabled('active_time') && (
-              <GlanceCard
-                icon={Timer}
-                value={`${todayWalkingMinutes}m`}
-                label="Active time"
-                subtitle={todayWalkingMinutes > 0 ? 'Today' : 'Start now'}
-                color={palette.catFood}
-                onPress={handleStartWalking}
-              />
-            )}
-
-            {/* Any custom Quick Actions with daily goals */}
-            {customGoalActions.map(action => {
-              const count = todayTaps[action._id]?.count ?? 0;
-              const target = action.dailyGoal ? Math.round(action.dailyGoal / (action.defaultValue ?? 1)) : 1;
-              return (
-                <GlanceCard
-                  key={action._id}
-                  emoji={action.icon || '🎯'}
-                  value={`${count}/${target}`}
-                  label={action.label}
-                  subtitle={`${Math.min(100, Math.round((count / target) * 100))}% goal`}
-                  color={action.color || palette.primary}
-                  onPress={() => router.push('/log')}
+          {/* Empty state when all metrics are hidden */}
+          {getActiveCount() === 0 && customGoalActions.length === 0 ? (
+            <TouchableOpacity
+              style={styles.emptyGlanceBox}
+              onPress={() => router.push('/customize/at-a-glance')}
+              activeOpacity={0.75}
+            >
+              <SlidersHorizontal size={20} color={palette.primary} />
+              <Text style={styles.emptyGlanceText}>
+                All glance cards are hidden. Tap to choose which metrics appear on your dashboard.
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.glanceRowContainer}>
+              {/* Featured Water Card */}
+              {isMetricEnabled('water') && (
+                <FeaturedWaterCard
+                  count={waterCount}
+                  goal={waterGoal}
+                  onManage={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedWaterActionId(waterAction?._id);
+                    setWaterModalVisible(true);
+                  }}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedWaterActionId(waterAction?._id);
+                    setWaterModalVisible(true);
+                  }}
                 />
-              );
-            })}
+              )}
 
-            {/* Empty state when all metrics are hidden */}
-            {getActiveCount() === 0 && customGoalActions.length === 0 && (
-              <TouchableOpacity
-                style={styles.emptyGlanceBox}
-                onPress={() => router.push('/customize/at-a-glance')}
-                activeOpacity={0.75}
-              >
-                <SlidersHorizontal size={20} color={palette.primary} />
-                <Text style={styles.emptyGlanceText}>
-                  All glance cards are hidden. Tap to choose which metrics appear on your dashboard.
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+              {/* 2-Row Horizontal Slider for Other Cards */}
+              {otherGlanceCards.length > 0 && (
+                <View style={styles.glanceSliderContainer}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.glanceSliderScroll}
+                  >
+                    {glanceColumns.map((col, colIdx) => (
+                      <View key={`glance-col-${colIdx}`} style={styles.glanceColumn}>
+                        {col.map(item => (
+                          <CompactGlanceCard key={item.id} item={item} />
+                        ))}
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={{ height: 24 }} />
@@ -514,7 +570,8 @@ export default function TodayScreen() {
   );
 }
 
-interface GlanceCardProps {
+interface GlanceItem {
+  id: string;
   icon?: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
   emoji?: string;
   value: string;
@@ -524,39 +581,147 @@ interface GlanceCardProps {
   onPress?: () => void;
 }
 
-function GlanceCard({ icon: IconComponent, emoji, value, label, subtitle, color, onPress }: GlanceCardProps) {
+interface FeaturedWaterCardProps {
+  count: number;
+  goal: number;
+  onManage: () => void;
+  onPress: () => void;
+}
+
+function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCardProps) {
+  const { colorScheme } = useTheme();
+  const styles = useStyles();
+  const isDark = colorScheme === 'dark';
+
+  const size = 84;
+  const strokeWidth = 7;
+  const center = size / 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = goal > 0 ? Math.min(1, Math.max(0, count / goal)) : 0;
+  const strokeDashoffset = circumference * (1 - progress);
+
+  const pct = goal > 0 ? (count / goal) * 100 : 0;
+  const pctStr = `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}% goal`;
+
+  const trackColor = isDark ? '#0E749033' : '#E0F2FE';
+  const progressColor = '#06B6D4';
+
+  return (
+    <TouchableOpacity
+      style={styles.featuredWaterCard}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={`Water progress: ${count} of ${goal} glasses. ${pctStr}`}
+    >
+      <View style={styles.waterCardTopRow}>
+        <View style={styles.waterRingWrapper}>
+          <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+            <Circle
+              cx={center}
+              cy={center}
+              r={radius}
+              stroke={trackColor}
+              strokeWidth={strokeWidth}
+              fill="none"
+            />
+            <Circle
+              cx={center}
+              cy={center}
+              r={radius}
+              stroke={progressColor}
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              fill="none"
+            />
+          </Svg>
+          <View style={styles.waterRingCenterText}>
+            <Text style={styles.waterRingCount}>{`${count}/${goal}`}</Text>
+            <Text style={styles.waterRingSubLabel}>Water</Text>
+          </View>
+        </View>
+
+        <View style={styles.waterBadgeBox}>
+          <Droplets size={22} color="#0EA5E9" strokeWidth={2.2} />
+        </View>
+      </View>
+
+      <View style={styles.waterCardBottomRow}>
+        <View style={styles.waterMetaCol}>
+          <Text style={styles.waterMetaTitle}>Water</Text>
+          <Text style={styles.waterMetaPercent}>{pctStr}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.waterManageBtn}
+          onPress={onManage}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Manage water intake"
+        >
+          <Text style={styles.waterManageBtnText}>Manage</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+interface CompactGlanceCardProps {
+  item: GlanceItem;
+}
+
+function CompactGlanceCard({ item }: CompactGlanceCardProps) {
   const { palette } = useTheme();
   const styles = useStyles();
 
   const handlePress = () => {
-    if (onPress) {
+    if (item.onPress) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onPress();
+      item.onPress();
     }
   };
 
+  const IconComp = item.icon;
+
   return (
     <TouchableOpacity
-      style={[styles.glanceCard, { borderLeftColor: color }]}
+      style={[
+        styles.compactGlanceCard,
+        { borderColor: item.color, backgroundColor: palette.surface },
+      ]}
       onPress={handlePress}
-      activeOpacity={onPress ? 0.7 : 1}
-      disabled={!onPress}
+      activeOpacity={item.onPress ? 0.75 : 1}
+      disabled={!item.onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
+      accessibilityLabel={`${item.label}: ${item.value}`}
     >
-      <View style={[styles.glanceEmojiBox, { backgroundColor: `${color}18` }]}>
-        {IconComponent ? (
-          <IconComponent size={18} color={color} strokeWidth={2.2} />
-        ) : (
-          <Text style={styles.glanceEmoji}>{emoji}</Text>
-        )}
+      <View style={styles.compactCardTop}>
+        <View style={styles.compactTextCol}>
+          <Text style={styles.compactValue} numberOfLines={1}>
+            {item.value}
+          </Text>
+          <Text style={styles.compactLabel} numberOfLines={1}>
+            {item.label}
+          </Text>
+        </View>
+
+        <View style={[styles.compactBadgeBox, { backgroundColor: `${item.color}16` }]}>
+          {IconComp ? (
+            <IconComp size={16} color={item.color} strokeWidth={2.2} />
+          ) : (
+            <Text style={styles.compactEmoji}>{item.emoji}</Text>
+          )}
+        </View>
       </View>
-      <View style={styles.glanceTextCol}>
-        <Text style={styles.glanceValue} numberOfLines={1}>{value}</Text>
-        <Text style={styles.glanceLabel} numberOfLines={1}>{label}</Text>
-        {subtitle ? <Text style={styles.glanceSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
-      </View>
-      {onPress ? <ChevronRight size={13} color={palette.textDisabled} style={styles.glanceChevron} /> : null}
+
+      {item.subtitle ? (
+        <Text style={styles.compactSubtitle} numberOfLines={1}>
+          {item.subtitle}
+        </Text>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -853,63 +1018,159 @@ const useStyles = createThemedStyles(palette => ({
     fontSize: 12,
     lineHeight: 16,
   },
-  glanceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 2,
-  },
-  glanceCard: {
-    width: '48.5%',
-    backgroundColor: palette.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderLeftWidth: 4,
-    padding: 10,
+  glanceRowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    gap: 10,
+    marginTop: 4,
   },
-  glanceEmojiBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  featuredWaterCard: {
+    width: 172,
+    height: 182,
+    backgroundColor: palette.surface,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#38BDF8',
+    padding: 12,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  waterCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  waterRingWrapper: {
+    width: 84,
+    height: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  waterRingCenterText: {
+    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glanceEmoji: {
+  waterRingCount: {
     fontSize: 18,
+    fontWeight: '800',
+    color: palette.text,
   },
-  glanceTextCol: {
+  waterRingSubLabel: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: palette.textSecondary,
+    marginTop: -1,
+  },
+  waterBadgeBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: palette.surfaceAlt === '#F5F0EB' ? '#E0F2FE' : '#0E749025',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waterCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  waterMetaCol: {
     flex: 1,
     justifyContent: 'center',
   },
-  glanceValue: {
+  waterMetaTitle: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: palette.textSecondary,
+  },
+  waterMetaPercent: {
+    fontSize: 11.5,
+    color: palette.textDisabled,
+    marginTop: 1,
+  },
+  waterManageBtn: {
+    backgroundColor: palette.surfaceAlt === '#F5F0EB' ? '#F5EBE6' : '#2D2723',
+    paddingHorizontal: 11,
+    paddingVertical: 5.5,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waterManageBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: palette.surfaceAlt === '#F5F0EB' ? '#785345' : '#F5D0C5',
+  },
+  glanceSliderContainer: {
+    flex: 1,
+  },
+  glanceSliderScroll: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingRight: 6,
+  },
+  glanceColumn: {
+    flexDirection: 'column',
+    gap: 10,
+    width: 144,
+  },
+  compactGlanceCard: {
+    width: 144,
+    height: 86,
+    borderRadius: 18,
+    borderWidth: 2,
+    padding: 10,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1.5,
+  },
+  compactCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  compactTextCol: {
+    flex: 1,
+    marginRight: 4,
+  },
+  compactValue: {
     ...typography.body,
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
     color: palette.text,
   },
-  glanceLabel: {
+  compactLabel: {
     ...typography.caption,
-    fontSize: 12,
+    fontSize: 11.5,
     color: palette.textSecondary,
     fontWeight: '500',
     marginTop: 1,
   },
-  glanceSubtitle: {
-    ...typography.caption,
-    fontSize: 10,
-    color: palette.textDisabled,
-    marginTop: 1,
+  compactBadgeBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  glanceChevron: {
-    opacity: 0.5,
+  compactEmoji: {
+    fontSize: 16,
+  },
+  compactSubtitle: {
+    ...typography.caption,
+    fontSize: 10.5,
+    color: palette.textDisabled,
+    fontWeight: '400',
   },
 }));

@@ -87,7 +87,7 @@ export function WalkingBannerCard({
   onPressWeather,
 }: WalkingBannerCardProps) {
   const { palette } = useTheme();
-  const { todaySummary, isTracking } = useActivityStore();
+  const { todaySummary, isTracking, distanceMeters, activeSeconds } = useActivityStore();
   const { weather, permissionStatus, requestPermissionAndFetch } = useWeatherStore();
 
   const activeTimeOfDay: TimeOfDay = useMemo(() => {
@@ -109,17 +109,16 @@ export function WalkingBannerCard({
     }
   };
 
-  const hasRealActivity =
-    (distanceKm !== undefined && distanceKm > 0) ||
-    (todaySummary?.totalDistanceKm !== undefined && todaySummary.totalDistanceKm > 0);
+  // Live session delta if a walk is currently active
+  const liveActiveKm = isTracking && distanceMeters > 0 ? distanceMeters / 1000 : 0;
+  const liveActiveMins = isTracking && activeSeconds > 0 ? Math.floor(activeSeconds / 60) : 0;
 
-  const todayDistanceKm = hasRealActivity
-    ? distanceKm ?? todaySummary?.totalDistanceKm ?? 3.4
-    : 3.4;
+  // Real aggregate distance and duration for today
+  const todayDistanceKm =
+    (distanceKm !== undefined ? distanceKm : (todaySummary?.totalDistanceKm ?? 0)) + liveActiveKm;
 
-  const todayWalkingMinutes = hasRealActivity
-    ? durationMinutes ?? todaySummary?.totalDurationMinutes ?? 42
-    : 42;
+  const todayWalkingMinutes =
+    (durationMinutes !== undefined ? durationMinutes : (todaySummary?.totalDurationMinutes ?? 0)) + liveActiveMins;
 
   return (
     <View style={[styles.cardContainer, style]}>

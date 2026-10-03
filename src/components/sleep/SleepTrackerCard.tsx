@@ -154,15 +154,14 @@ export function SleepTrackerCard({ style }: SleepTrackerCardProps) {
   const liveElapsedMinutes = useMemo(() => {
     if (!isSleeping || !activeSleepStart) return 0;
     const startMs = new Date(activeSleepStart).getTime();
-    return Math.max(1, Math.round((nowMs - startMs) / 60000));
+    if (isNaN(startMs)) return 0;
+    return Math.max(0, Math.round((nowMs - startMs) / 60000));
   }, [isSleeping, activeSleepStart, nowMs]);
 
   // Handle "Go to bed"
   const handleStartSleep = async () => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await startSleep();
-    // Prompt evening check-in if appropriate
-    router.push('/check-in?type=evening');
   };
 
   // Handle "Tap when you're awake"
@@ -189,15 +188,12 @@ export function SleepTrackerCard({ style }: SleepTrackerCardProps) {
     const isGoalMet = liveElapsedMinutes >= targetGoalMinutes;
 
     return (
-      <View style={[styles.cardContainer, style]}>
-        {/* Midnight Ambient Gradient */}
-        <LinearGradient
-          colors={['#0F172A', '#1E1B4B', '#111827']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-
+      <LinearGradient
+        colors={['#0F172A', '#1E1B4B', '#111827']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.cardContainer, styles.activeSleepCard, style]}
+      >
         <View style={styles.cardContent}>
           {/* Top Status Row */}
           <View style={styles.topStatusRow}>
@@ -281,6 +277,16 @@ export function SleepTrackerCard({ style }: SleepTrackerCardProps) {
               <Text style={styles.wakeUpButtonText}>Tap when you're awake</Text>
             </View>
           </PressableScale>
+
+          {/* Optional Evening Check-in link */}
+          <TouchableOpacity
+            style={styles.eveningCheckinOptionalBtn}
+            onPress={() => router.push('/check-in?type=evening')}
+            activeOpacity={0.7}
+          >
+            <Moon size={13} color="#A5B4FC" style={{ marginRight: 6 }} />
+            <Text style={styles.eveningCheckinOptionalText}>Evening Check-in (Optional)</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Quality Check-in Modal */}
@@ -298,7 +304,7 @@ export function SleepTrackerCard({ style }: SleepTrackerCardProps) {
           onClose={() => setAdjustModalVisible(false)}
           sleepRecord={pendingRecord || lastSleepRecord}
         />
-      </View>
+      </LinearGradient>
     );
   }
 
@@ -702,6 +708,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.2,
+  },
+  activeSleepCard: {
+    borderWidth: 1,
+    borderColor: '#4338CA60',
+  },
+  eveningCheckinOptionalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    paddingVertical: 6,
+  },
+  eveningCheckinOptionalText: {
+    color: '#A5B4FC',
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Awake Summary Styles
   summaryHeaderRow: {

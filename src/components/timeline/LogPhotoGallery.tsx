@@ -8,11 +8,13 @@ import {
   Modal,
   Dimensions,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
-import { Eye, EyeOff, X, Image as ImageIcon, ZoomIn } from 'lucide-react-native';
+import { Eye, EyeOff, X, Image as ImageIcon, ZoomIn, AlertCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
+import { useResolvedMediaUrls } from '../../services/mediaService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -32,14 +34,23 @@ export function LogPhotoGallery({
 
   const [revealed, setRevealed] = useState(!isSensitive);
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
+  const [lightboxLoading, setLightboxLoading] = useState(false);
+  const [lightboxError, setLightboxError] = useState(false);
 
-  const photoList: string[] = Array.isArray(uris)
-    ? uris.filter(Boolean)
+  const [loadingThumbs, setLoadingThumbs] = useState<Record<number, boolean>>({});
+  const [failedThumbs, setFailedThumbs] = useState<Record<number, boolean>>({});
+
+  const { urls: resolvedUrls, isLoading: isResolving } = useResolvedMediaUrls(uris);
+
+  const rawList: string[] = Array.isArray(uris)
+    ? uris.filter(Boolean).map(String)
     : typeof uris === 'string' && uris.trim().length > 0
     ? [uris.trim()]
     : [];
 
-  if (photoList.length === 0) return null;
+  const photoList = resolvedUrls.length > 0 ? resolvedUrls : rawList;
+
+  if (rawList.length === 0) return null;
 
   const handleToggleReveal = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -49,6 +60,8 @@ export function LogPhotoGallery({
   const handleOpenViewer = (uri: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setActivePhoto(uri);
+    setLightboxLoading(true);
+    setLightboxError(false);
   };
 
   return (
@@ -58,7 +71,7 @@ export function LogPhotoGallery({
         <View style={styles.labelRow}>
           <ImageIcon size={13} color={palette.primary} />
           <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>
-            {fieldLabel} ({photoList.length})
+            {fieldLabel} ({rawList.length})
           </Text>
         </View>
 
@@ -102,6 +115,9 @@ export function LogPhotoGallery({
         contentContainerStyle={styles.thumbnailScroll}
       >
         {photoList.map((uri, index) => {
+          const isLoadingThis = isResolving || loadingThumbs[index];
+          const hasError = failedThumbs[index];
+
           return (
             <View key={`thumb-${index}`} style={styles.thumbWrapper}>
               <TouchableOpacity
@@ -117,7 +133,7 @@ export function LogPhotoGallery({
                 onPress={() => {
                   if (!revealed) {
                     setRevealed(true);
-                  } else {
+                  } else if (!hasError && uri) {
                     handleOpenViewer(uri);
                   }
                 }}
@@ -125,27 +141,58 @@ export function LogPhotoGallery({
                 accessibilityRole="button"
                 accessibilityLabel={`View photo ${index + 1}`}
               >
-                {/* Image */}
-                <Image
-                  source={{ uri }}
-                  style={[styles.thumbnail, !revealed && styles.blurredImage]}
-                  blurRadius={!revealed ? 24 : 0}
-                  resizeMode="cover"
-                />
-
-                {/* Privacy overlay if hidden */}
-                {!revealed && (
-                  <View style={styles.privacyOverlay}>
-                    <Eye size={20} color="#FFFFFF" strokeWidth={2.2} />
-                    <Text style={styles.privacyText}>Tap to reveal</Text>
+                {/* Fallback for broken/inaccessible URL */}
+                {hasError ? (
+                  <View style={styles.errorContainer}>
+                    <AlertCircle size={22} color={palette.error ?? '#EF4444'} />
+                    <Text style={[styles.errorSubtext, { color: palette.textTertiary ?? '#9CA3AF' }]}>
+                      Unavailable
+                    </Text>
                   </View>
-                )}
+                ) : (
+                  <>
+                    {/* The Image */}
+                    {!!uri && (
+                      <Image
+                        source={{ uri }}
+                        style={[styles.thumbnail, !revealed && styles.blurredImage]}
+                        blurRadius={!revealed ? 24 : 0}
+                        resizeMode="cover"
+                        onLoadStart={() => {
+                          setLoadingThumbs((prev) => ({ ...prev, [index]: true }));
+                        }}
+                        onLoadEnd={() => {
+                          setLoadingThumbs((prev) => ({ ...prev, [index]: false }));
+                        }}
+                        onError={() => {
+                          setLoadingThumbs((prev) => ({ ...prev, [index]: false }));
+                          setFailedThumbs((prev) => ({ ...prev, [index]: true }));
+                        }}
+                      />
+                    )}
 
-                {/* Zoom badge when revealed */}
-                {revealed && (
-                  <View style={styles.zoomBadge}>
-                    <ZoomIn size={12} color="#FFFFFF" />
-                  </View>
+                    {/* Loading Indicator Spinner */}
+                    {isLoadingThis && (
+                      <View style={styles.loadingOverlay}>
+                        <ActivityIndicator size="small" color={palette.primary} />
+                      </View>
+                    )}
+
+                    {/* Privacy overlay if hidden */}
+                    {!revealed && !isLoadingThis && (
+                      <View style={styles.privacyOverlay}>
+                        <Eye size={20} color="#FFFFFF" strokeWidth={2.2} />
+                        <Text style={styles.privacyText}>Tap to reveal</Text>
+                      </View>
+                    )}
+
+                    {/* Zoom badge when revealed */}
+                    {revealed && !isLoadingThis && (
+                      <View style={styles.zoomBadge}>
+                        <ZoomIn size={12} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </>
                 )}
               </TouchableOpacity>
             </View>
@@ -174,14 +221,45 @@ export function LogPhotoGallery({
             </TouchableOpacity>
           </View>
 
-          {/* Fullscreen image */}
-          {!!activePhoto && (
-            <Image
-              source={{ uri: activePhoto }}
-              style={styles.lightboxImage}
-              resizeMode="contain"
-            />
-          )}
+          {/* Lightbox content */}
+          <View style={styles.lightboxImageContainer}>
+            {lightboxLoading && (
+              <View style={styles.lightboxLoader}>
+                <ActivityIndicator size="large" color="#FFFFFF" />
+                <Text style={styles.lightboxLoadingText}>Loading full image...</Text>
+              </View>
+            )}
+
+            {lightboxError ? (
+              <View style={styles.lightboxErrorContainer}>
+                <AlertCircle size={44} color="#EF4444" />
+                <Text style={styles.lightboxErrorText}>Unable to load photo</Text>
+                <TouchableOpacity
+                  style={styles.lightboxRetryBtn}
+                  onPress={() => {
+                    setLightboxLoading(true);
+                    setLightboxError(false);
+                  }}
+                >
+                  <Text style={styles.lightboxRetryText}>Tap to retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              !!activePhoto && (
+                <Image
+                  source={{ uri: activePhoto }}
+                  style={styles.lightboxImage}
+                  resizeMode="contain"
+                  onLoadStart={() => setLightboxLoading(true)}
+                  onLoadEnd={() => setLightboxLoading(false)}
+                  onError={() => {
+                    setLightboxLoading(false);
+                    setLightboxError(true);
+                  }}
+                />
+              )
+            )}
+          </View>
         </View>
       </Modal>
     </View>
@@ -245,6 +323,24 @@ const styles = StyleSheet.create({
   blurredImage: {
     opacity: 0.6,
   },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 6,
+  },
+  errorSubtext: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 3,
+    textAlign: 'center',
+  },
   privacyOverlay: {
     position: 'absolute',
     top: 0,
@@ -299,6 +395,47 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  lightboxImageContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.75,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxLoader: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 5,
+  },
+  lightboxLoadingText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  lightboxErrorContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  lightboxErrorText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 10,
+  },
+  lightboxRetryBtn: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  lightboxRetryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   lightboxImage: {
     width: SCREEN_WIDTH,

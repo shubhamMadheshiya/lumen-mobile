@@ -15,21 +15,39 @@ export async function uploadAnswerImages(answers: Answer[]): Promise<Answer[]> {
     const values = await Promise.all(
       (ans.values ?? []).map(async v => {
         if (v.dataType !== 'image') return v;
-        const uris: string[] = Array.isArray(v.value) ? v.value : [];
+        const uris: string[] = Array.isArray(v.value)
+          ? v.value.map(String)
+          : typeof v.value === 'string' && v.value.trim().length > 0
+          ? [v.value.trim()]
+          : [];
         const mediaIds: string[] = [];
+
         for (const uri of uris) {
-          // Already a mediaId (server ID, not a local file:// or content:// URI)
-          if (!uri.startsWith('file://') && !uri.startsWith('content://') && !uri.startsWith('ph://')) {
-            mediaIds.push(uri);
+          const trimmed = uri.trim();
+          if (!trimmed) continue;
+
+          // Check if already an uploaded server mediaId (Mongo ObjectId / UUID) or remote URL
+          const isMongoId = /^[0-9a-fA-F]{24}$/.test(trimmed);
+          const isUuid = /^[0-9a-fA-F-]{36}$/.test(trimmed);
+          const isRemoteUrl =
+            (trimmed.startsWith('http://') || trimmed.startsWith('https://')) &&
+            !trimmed.startsWith('http://localhost') &&
+            !trimmed.startsWith('http://127.0.0.1');
+
+          if (isMongoId || isUuid || isRemoteUrl) {
+            mediaIds.push(trimmed);
             continue;
           }
+
+          // Local file (file://, content://, ph://, blob:, etc.) -> upload
           try {
-            const mime = getMimeType(uri);
-            const res = await uploadMedia(uri, mime);
+            const mime = getMimeType(trimmed);
+            const res = await uploadMedia(trimmed, mime);
             mediaIds.push(res.mediaId);
-          } catch {
+          } catch (err) {
+            console.warn('[uploadAnswerImages] upload failed for URI:', trimmed, err);
             // Keep local URI as fallback — queue will retry
-            mediaIds.push(uri);
+            mediaIds.push(trimmed);
           }
         }
         return { ...v, value: mediaIds };

@@ -86,11 +86,16 @@ export async function flushQueue(): Promise<void> {
 }
 
 export function getMimeType(uri: string): string {
-  const ext = uri.split('.').pop()?.toLowerCase() ?? '';
+  if (uri.startsWith('data:image/')) {
+    const match = uri.match(/^data:(image\/[a-zA-Z0-9.+-]+);/);
+    if (match) return match[1];
+  }
+  const cleanUri = uri.split('?')[0].split('#')[0];
+  const ext = cleanUri.split('.').pop()?.toLowerCase() ?? '';
   const map: Record<string, string> = {
     jpg: 'image/jpeg', jpeg: 'image/jpeg',
     png: 'image/png', webp: 'image/webp', heic: 'image/heic',
     mp4: 'video/mp4', mov: 'video/quicktime',
   };
-  return map[ext] ?? 'application/octet-stream';
+  return map[ext] ?? 'image/jpeg';
 }

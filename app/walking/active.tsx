@@ -27,14 +27,15 @@ import { useActivityStore } from '../../src/store/activityStore';
 import { permissionService } from '../../src/services/permissionService';
 import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
 
-function formatTimer(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
+function formatTimer(totalSeconds: number = 0): string {
+  const safeSec = Math.max(0, Math.floor(totalSeconds || 0));
+  const h = Math.floor(safeSec / 3600);
+  const m = Math.floor((safeSec % 3600) / 60);
+  const s = safeSec % 60;
 
-  const hh = h > 0 ? `${h < 10 ? '0' : ''}${h}:` : '';
-  const mm = `${m < 10 ? '0' : ''}${m}`;
-  const ss = `${s < 10 ? '0' : ''}${s}`;
+  const hh = h > 0 ? `${String(h).padStart(2, '0')}:` : '';
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
   return `${hh}${mm}:${ss}`;
 }
 
@@ -161,7 +162,16 @@ export default function ActiveWalkingScreen() {
           <Clock size={14} color="#FF6B35" />
           <Text style={styles.timerHeaderLabel}>ACTIVE DURATION</Text>
         </View>
-        <Text style={styles.timerDisplay}>{formatTimer(activeSeconds)}</Text>
+        <Text
+          style={[
+            styles.timerDisplay,
+            activeSeconds >= 3600 && styles.timerDisplayLong,
+          ]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {formatTimer(activeSeconds)}
+        </Text>
         <View style={styles.speedSubRow}>
           <Text style={styles.speedSubText}>
             Current speed: <Text style={styles.speedSubHighlight}>{speedDisplay} km/h</Text>
@@ -386,13 +396,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   timerDisplay: {
-    ...typography.h1,
-    fontSize: 68,
-    fontWeight: '900',
+    fontSize: 56,
+    lineHeight: 68,
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -1.5,
+    letterSpacing: 1.2,
     fontVariant: ['tabular-nums'],
-    marginVertical: 2,
+    textAlign: 'center',
+    includeFontPadding: false,
+    marginVertical: 4,
+  },
+  timerDisplayLong: {
+    fontSize: 44,
+    lineHeight: 54,
+    letterSpacing: 0.8,
   },
   speedSubRow: {
     marginTop: 6,

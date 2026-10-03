@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { api } from '../../api/client';
 import { useQuickLogStore } from '../../store/quickLogStore';
 import {
+  CHANNEL_ID_ALARM,
   CHANNEL_ID_CLINICAL,
   CHANNEL_ID_HABITS,
   CHANNEL_ID_PACING,
@@ -82,10 +83,22 @@ describe('Lumen Notification Engine & Clinical Alert Architecture', () => {
   });
 
   describe('1. Native Android Channels Initialization', () => {
-    it('creates all 3 specialized notification channels on Android', async () => {
+    it('creates all specialized notification channels on Android', async () => {
       await ensureNotificationChannel();
 
-      expect(mockSetNotificationChannelAsync).toHaveBeenCalledTimes(4);
+      expect(mockSetNotificationChannelAsync).toHaveBeenCalledTimes(5);
+
+      // Alarm Channel
+      expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
+        CHANNEL_ID_ALARM,
+        expect.objectContaining({
+          name: 'Lumen Alarms & Reminders',
+          importance: 5,
+          bypassDnd: true,
+          enableVibrate: true,
+          vibrationPattern: [0, 500, 250, 500, 250, 500],
+        })
+      );
 
       // Clinical Channel
       expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
@@ -93,6 +106,7 @@ describe('Lumen Notification Engine & Clinical Alert Architecture', () => {
         expect.objectContaining({
           name: 'Clinical & Flare Alerts',
           importance: 5,
+          bypassDnd: true,
           enableVibrate: true,
           vibrationPattern: [0, 400, 200, 400],
         })
@@ -103,8 +117,10 @@ describe('Lumen Notification Engine & Clinical Alert Architecture', () => {
         CHANNEL_ID_HABITS,
         expect.objectContaining({
           name: 'Habits & Health Reminders',
-          importance: 4,
-          vibrationPattern: [0, 250, 250, 250],
+          importance: 5,
+          bypassDnd: true,
+          enableVibrate: true,
+          vibrationPattern: [0, 400, 200, 400],
         })
       );
 

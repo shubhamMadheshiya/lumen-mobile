@@ -25,6 +25,7 @@ try {
       shouldSetBadge: false,
       shouldShowBanner: true,
       shouldShowList: true,
+      priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
     }),
   });
 } catch {
@@ -32,10 +33,11 @@ try {
 }
 
 const MAPPING_KEY = 'lumen:notif:mapping_v2'; // { reminderId: string[] (notificationIds) }
-export const CHANNEL_ID_CLINICAL = 'lumen_clinical_flare_v1';
-export const CHANNEL_ID_HABITS = 'lumen_habits_v1';
-export const CHANNEL_ID_PACING = 'lumen_pacing_v1';
-const CHANNEL_ID = CHANNEL_ID_HABITS; // Default backwards-compatible alias
+export const CHANNEL_ID_ALARM = 'lumen_alarm_clock_v2';
+export const CHANNEL_ID_CLINICAL = 'lumen_clinical_flare_v2';
+export const CHANNEL_ID_HABITS = 'lumen_habits_v2';
+export const CHANNEL_ID_PACING = 'lumen_pacing_v2';
+export const CHANNEL_ID = CHANNEL_ID_ALARM; // Default high-priority alarm channel
 
 export const NOTIF_CATEGORIES = {
   FLARE: 'lumen_category_flare',
@@ -134,48 +136,78 @@ export async function ensureNotificationChannel(): Promise<void> {
     }
   };
 
+  const alarmAudioAttributes = {
+    usage: N.AndroidAudioUsage?.ALARM ?? 4,
+    contentType: N.AndroidAudioContentType?.SONIFICATION ?? 4,
+    flags: {
+      enforceAudibility: true,
+      requestHardwareAudioVideoSynchronization: false,
+    },
+  };
+
   try {
     await Promise.allSettled([
-      // 1. Clinical Channel (MAX importance, high alert chime & vibration)
+      // 1. Dedicated Alarm & Reminder Channel (MAX importance, Alarm Audio Stream, bypass DND, public lockscreen)
+      createChannelSafe(CHANNEL_ID_ALARM, {
+        name: 'Lumen Alarms & Reminders',
+        description: 'Audible alarm ringing and lock-screen popups for health routines and scheduled reminders',
+        importance: N.AndroidImportance?.MAX ?? 5,
+        vibrationPattern: [0, 500, 250, 500, 250, 500],
+        sound: 'default',
+        enableLights: true,
+        lightColor: '#FF6B35',
+        enableVibrate: true,
+        bypassDnd: true,
+        lockscreenVisibility: N.AndroidNotificationVisibility?.PUBLIC ?? 1,
+        audioAttributes: alarmAudioAttributes,
+      }),
+      // 2. Clinical Channel (MAX importance, high alert chime & vibration)
       createChannelSafe(CHANNEL_ID_CLINICAL, {
         name: 'Clinical & Flare Alerts',
         description: 'Critical atmospheric pressure drops, extreme UV warnings, and urgent medication timing',
-        importance: N.AndroidImportance.MAX,
+        importance: N.AndroidImportance?.MAX ?? 5,
         vibrationPattern: [0, 400, 200, 400],
         sound: 'default',
         enableLights: true,
+        lightColor: '#EF4444',
         enableVibrate: true,
-        lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+        lockscreenVisibility: N.AndroidNotificationVisibility?.PUBLIC ?? 1,
+        audioAttributes: alarmAudioAttributes,
       }),
-      // 2. Habits & Reminders Channel
+      // 3. Habits & Reminders Channel (MAX importance so it alarms on lock screen)
       createChannelSafe(CHANNEL_ID_HABITS, {
         name: 'Habits & Health Reminders',
         description: 'Scheduled reminders for hydration, movement, and sleep session tracking',
-        importance: N.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
+        importance: N.AndroidImportance?.MAX ?? 5,
+        vibrationPattern: [0, 400, 200, 400],
         sound: 'default',
         enableLights: true,
+        lightColor: '#FF6B35',
         enableVibrate: true,
-        lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+        lockscreenVisibility: N.AndroidNotificationVisibility?.PUBLIC ?? 1,
+        audioAttributes: alarmAudioAttributes,
       }),
-      // 3. Activity Pacing Channel
+      // 4. Activity Pacing Channel
       createChannelSafe(CHANNEL_ID_PACING, {
         name: 'Activity Pacing & Spoon Theory',
         description: 'Milestones and post-exertional malaise fatigue prevention advice',
-        importance: N.AndroidImportance.HIGH,
+        importance: N.AndroidImportance?.HIGH ?? 4,
         vibrationPattern: [0, 300, 150, 300],
         sound: 'default',
         enableLights: true,
         enableVibrate: true,
-        lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+        lockscreenVisibility: N.AndroidNotificationVisibility?.PUBLIC ?? 1,
       }),
-      // 4. Legacy channel alias for backwards compatibility
+      // 5. Legacy channel alias for backwards compatibility
       createChannelSafe('lumen_reminders_v1', {
         name: 'General Reminders',
         description: 'Lumen daily reminders and health alerts',
-        importance: N.AndroidImportance.HIGH,
+        importance: N.AndroidImportance?.HIGH ?? 4,
         vibrationPattern: [0, 250, 250, 250],
         sound: 'default',
+        lockscreenVisibility: N.AndroidNotificationVisibility?.PUBLIC ?? 1,
       }),
     ]);
   } catch (err) {
@@ -303,8 +335,9 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     data: { reminderId: reminder._id, linkedQuickActionId: reminder.linkedQuickActionId },
     categoryIdentifier: categoryId,
     sound: 'default',
-    priority: 'max',
-    vibrate: [0, 250, 250, 250],
+    priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
+    vibrate: [0, 500, 250, 500, 250, 500],
+    channelId,
     ...(Platform.OS === 'android' ? { channelId } : {}),
   };
 
@@ -484,12 +517,13 @@ export async function sendTestReminderNotification(): Promise<boolean> {
     await N.scheduleNotificationAsync({
       content: {
         title: '🔔 Lumen Alarm Test',
-        body: 'Your reminder alarms, sound, and notifications are working properly! 🎉',
+        body: 'Your reminder alarms, sound, and lock-screen alerts are working properly! 🎉',
         sound: 'default',
-        priority: 'max',
-        vibrate: [0, 250, 250, 250],
+        priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
+        vibrate: [0, 500, 250, 500, 250, 500],
         categoryIdentifier: NOTIF_CATEGORIES.WATER,
         data: { test: true, reminderId: 'test_alarm' },
+        channelId: CHANNEL_ID,
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
       trigger: {

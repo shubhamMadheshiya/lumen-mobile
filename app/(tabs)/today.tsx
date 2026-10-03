@@ -45,6 +45,7 @@ import { useWeatherStore } from '../../src/store/weatherStore';
 
 import { DayClockCard } from '../../src/components/DayClockCard';
 import { QuickActionButton } from '../../src/components/QuickActionButton';
+import { LumenIcon } from '../../src/components/common/LumenLogo';
 import { UndoToast } from '../../src/components/UndoToast';
 import { FlareNowButton } from '../../src/components/FlareNowButton';
 import { WaterQuantityModal } from '../../src/components/WaterQuantityModal';
@@ -153,6 +154,12 @@ export default function TodayScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <LumenIcon size={18} />
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: palette.primary, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                Lumen
+              </Text>
+            </View>
             <Text style={styles.greeting}>{greeting()}{user?.name ? `, ${user.name.split(' ')[0]}` : ''}</Text>
             <Text style={styles.date}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
           </View>

@@ -9,6 +9,7 @@ import { typography } from '../../src/theme/typography';
 import { useAuthStore } from '../../src/store/authStore';
 import { ApiError } from '../../src/api/client';
 import { useGoogleAuth } from '../../src/hooks/useGoogleAuth';
+import { LumenLogo } from '../../src/components/common/LumenLogo';
 
 export default function LoginScreen() {
   const { palette } = useTheme();
@@ -39,8 +40,11 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.logo}>🌿 Lumen</Text>
-        <Text style={styles.tagline}>Track your health journey</Text>
+        <View style={styles.logoHeader}>
+          <LumenLogo variant="badge" size={72} style={styles.logoBadge} />
+          <Text style={styles.logo}>🌿 Lumen</Text>
+          <Text style={styles.tagline}>Track your health journey</Text>
+        </View>
 
         <View style={styles.form}>
           <TextInput
@@ -114,8 +118,10 @@ export default function LoginScreen() {
 const useStyles = createThemedStyles(palette => ({
   container: { flex: 1, backgroundColor: palette.background },
   scroll:    { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  logo:      { ...typography.h1, textAlign: 'center', marginBottom: 4, color: palette.text },
-  tagline:   { ...typography.body, color: palette.textSecondary, textAlign: 'center', marginBottom: 40 },
+  logoHeader: { alignItems: 'center', marginBottom: 28 },
+  logoBadge:  { marginBottom: 14 },
+  logo:       { ...typography.h1, textAlign: 'center', marginBottom: 4, color: palette.text },
+  tagline:    { ...typography.body, color: palette.textSecondary, textAlign: 'center' },
   form:      { gap: 12 },
   input: {
     backgroundColor: palette.surface,

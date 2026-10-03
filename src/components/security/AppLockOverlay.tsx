@@ -18,6 +18,7 @@ import { typography } from '../../theme/typography';
 import { useSecurityStore } from '../../store/securityStore';
 import { useAuthStore } from '../../store/authStore';
 import { router } from 'expo-router';
+import { LumenLogo } from '../common/LumenLogo';
 
 export function AppLockOverlay() {
   const { palette } = useTheme();
@@ -71,12 +72,8 @@ export function AppLockOverlay() {
         />
 
         <View style={styles.centerContent}>
-          {/* Lock Icon Emblem */}
-          <View style={[styles.emblemContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-            <View style={[styles.innerBadge, { backgroundColor: palette.primary + '14' }]}>
-              <ShieldCheck size={48} color={palette.primary} strokeWidth={2.2} />
-            </View>
-          </View>
+          {/* Lumen App Emblem */}
+          <LumenLogo variant="badge" size={80} style={styles.logoBadge} />
 
           <Text style={[styles.title, { color: palette.text }]}>Lumen is Locked</Text>
           <Text style={[styles.subtitle, { color: palette.textSecondary }]}>
@@ -161,12 +158,8 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  innerBadge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoBadge: {
+    marginBottom: 20,
   },
   title: {
     ...typography.h2,

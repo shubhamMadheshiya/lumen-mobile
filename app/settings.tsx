@@ -62,6 +62,7 @@ import { api } from '../src/api/client';
 import { buttonProps } from '../src/utils/accessibility';
 import { typography } from '../src/theme/typography';
 import { ThemeTokens } from '../src/theme/tokens';
+import { LumenLogo } from '../src/components/common/LumenLogo';
 
 type ThemePref = 'system' | 'light' | 'dark';
 
@@ -909,6 +910,14 @@ export default function SettingsScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+ 
+        {/* About Lumen Brand Section */}
+        <View style={styles.brandFooter}>
+          <LumenLogo variant="full" size={54} />
+          <Text style={[styles.brandVersionText, { color: palette.textSecondary }]}>
+            Version 0.1.0 • Built with care for Autoimmune Health
+          </Text>
+        </View>
 
         <View style={{ height: 48 }} />
       </ScrollView>
@@ -1569,6 +1578,18 @@ function makeStyles(palette: ThemeTokens) {
       fontSize: 13,
       lineHeight: 19,
       color: palette.textSecondary,
+      textAlign: 'center',
+    },
+    brandFooter: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 28,
+      marginBottom: 8,
+      gap: 10,
+    },
+    brandVersionText: {
+      fontSize: 12,
+      fontWeight: '500',
       textAlign: 'center',
     },
   });

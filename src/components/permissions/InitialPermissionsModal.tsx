@@ -26,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 import { permissionService } from '../../services/permissionService';
+import { LumenLogo } from '../common/LumenLogo';
 
 interface Props {
   visible: boolean;
@@ -67,9 +68,7 @@ export function InitialPermissionsModal({ visible, onComplete }: Props) {
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {/* Header Icon & Title */}
             <View style={styles.header}>
-              <View style={styles.logoBadge}>
-                <Sparkles size={32} color={palette.primary} strokeWidth={2.2} />
-              </View>
+              <LumenLogo variant="badge" size={64} style={styles.logoBadge} />
               <Text style={styles.title}>Welcome to Lumen</Text>
               <Text style={styles.subtitle}>
                 To give you the most accurate daily wellness & symptom tracking, Lumen uses a few device permissions:

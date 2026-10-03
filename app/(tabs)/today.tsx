@@ -8,7 +8,7 @@
  * ─ "Undo" toast
  * ─ Floating "+ Log" button
  */
-import React, { useEffect, useCallback, useState, useRef } from 'react';
+import React, { useEffect, useCallback, useState, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, RefreshControl, useWindowDimensions,
@@ -82,6 +82,30 @@ export default function TodayScreen() {
   const [waterModalVisible, setWaterModalVisible] = useState(false);
   const [selectedWaterActionId, setSelectedWaterActionId] = useState<string | undefined>(undefined);
   const [weatherModalVisible, setWeatherModalVisible] = useState(false);
+
+  // Time tracker for dynamic daytime vs evening (9:30 PM = 21:30 = 1290 minutes) card positions
+  const [currentTimeMinutes, setCurrentTimeMinutes] = useState(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setCurrentTimeMinutes(now.getHours() * 60 + now.getMinutes());
+    }, 30000); // 30-second live check
+    return () => clearInterval(interval);
+  }, []);
+
+  // Daytime active mode: Awake (not sleeping) AND before 9:30 PM (21:30 = 1290 minutes)
+  const isDaytimeMode = useMemo(() => {
+    if (isSleeping) return false;
+    // 9:30 PM cutoff: 21 * 60 + 30 = 1290 minutes
+    if (currentTimeMinutes >= 1290) return false;
+    // Early morning before 4:00 AM if user hasn't woken up today
+    if (currentTimeMinutes < 240 && !lastSleepRecord?.wakeTime) return false;
+    return true;
+  }, [isSleeping, currentTimeMinutes, lastSleepRecord]);
 
   const loadData = useCallback(async () => {
     await Promise.allSettled([
@@ -207,19 +231,33 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* Day clock card */}
-        <DayClockCard />
+        {/* Daytime Position 1: Walking Tracker Card */}
+        {isDaytimeMode && (
+          <WalkingBannerCard
+            distanceKm={todayDistanceKm}
+            durationMinutes={todayWalkingMinutes}
+            onPressHistory={() => router.push('/walking')}
+            onPressWeather={() => setWeatherModalVisible(true)}
+          />
+        )}
 
-        {/* Flare Now shortcut */}
+        {/* Night / Wind-down Position 1: Day clock / Sleep card */}
+        {!isDaytimeMode && (
+          <DayClockCard />
+        )}
+
+        {/* Position 2: Quick Log shortcut */}
         <FlareNowButton />
 
-        {/* Walking Tracker Card (Live weather displayed on card) */}
-        <WalkingBannerCard
-          distanceKm={todayDistanceKm}
-          durationMinutes={todayWalkingMinutes}
-          onPressHistory={() => router.push('/walking')}
-          onPressWeather={() => setWeatherModalVisible(true)}
-        />
+        {/* Night / Wind-down Position 3: Walking Tracker Card (placed after Quick Log) */}
+        {!isDaytimeMode && (
+          <WalkingBannerCard
+            distanceKm={todayDistanceKm}
+            durationMinutes={todayWalkingMinutes}
+            onPressHistory={() => router.push('/walking')}
+            onPressWeather={() => setWeatherModalVisible(true)}
+          />
+        )}
 
         {/* Active Reminders Card */}
         <View style={styles.section}>
@@ -398,7 +436,11 @@ export default function TodayScreen() {
                       : palette.catHabits
                 }
                 onPress={() => {
-                  scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                  if (isDaytimeMode) {
+                    router.push('/settings');
+                  } else {
+                    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                  }
                 }}
               />
             )}

@@ -63,6 +63,7 @@ import { buttonProps } from '../src/utils/accessibility';
 import { typography } from '../src/theme/typography';
 import { ThemeTokens } from '../src/theme/tokens';
 import { LumenLogo } from '../src/components/common/LumenLogo';
+import { DayClockCard } from '../src/components/DayClockCard';
 
 type ThemePref = 'system' | 'light' | 'dark';
 
@@ -468,6 +469,17 @@ export default function SettingsScreen() {
               ) : null}
             </View>
           </View>
+        </View>
+
+        {/* Sleep & Recovery Summary Card */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Sleep & Recovery</Text>
+        </View>
+        <Text style={styles.sectionDescription}>
+          Track sleep quality, duration, and cellular recovery milestones.
+        </Text>
+        <View style={{ marginBottom: 18 }}>
+          <DayClockCard />
         </View>
 
         {/* Personal Vitals & Demographics */}

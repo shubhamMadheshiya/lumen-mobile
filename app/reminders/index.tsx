@@ -19,7 +19,7 @@ import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useWeatherStore } from '../../src/store/weatherStore';
 import { useActivityStore } from '../../src/store/activityStore';
-import { sendTestReminderNotification, requestNotificationPermissions } from '../../src/services/notifications';
+import { sendTestReminderNotification, requestNotificationPermissions, getLastNotificationError } from '../../src/services/notifications';
 import { IReminder, ReminderCategory } from '@lumen/shared';
 import { permissionService } from '../../src/services/permissionService';
 import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
@@ -95,14 +95,17 @@ export default function RemindersScreen() {
     if (success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
-        '🔔 Alarm Scheduled (3 Seconds)',
-        'Lock your phone or leave the app open — your reminder alarm will fire in 3 seconds with sound and vibration!',
+        '🔔 Alarm Test Triggered',
+        'Your reminder alarm is firing with sound and vibration! You can lock your phone or leave the app open.',
         [{ text: 'Got it!' }]
       );
     } else {
+      const errorMsg = getLastNotificationError();
       Alert.alert(
         'Test Failed',
-        'Could not schedule test alarm. Ensure notification permissions are granted in phone settings.'
+        errorMsg
+          ? `Could not trigger test alarm:\n\n${errorMsg}`
+          : 'Could not schedule test alarm. Ensure notification permissions are granted in phone settings.'
       );
     }
   };

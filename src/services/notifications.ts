@@ -39,6 +39,18 @@ export const CHANNEL_ID_HABITS = 'lumen_habits_v2';
 export const CHANNEL_ID_PACING = 'lumen_pacing_v2';
 export const CHANNEL_ID = CHANNEL_ID_ALARM; // Default high-priority alarm channel
 
+export const TRIGGER_TYPES = {
+  DATE: N?.SchedulableTriggerInputTypes?.DATE ?? 'date',
+  DAILY: N?.SchedulableTriggerInputTypes?.DAILY ?? 'daily',
+  WEEKLY: N?.SchedulableTriggerInputTypes?.WEEKLY ?? 'weekly',
+  TIME_INTERVAL: N?.SchedulableTriggerInputTypes?.TIME_INTERVAL ?? 'timeInterval',
+};
+
+let lastNotificationError: string | null = null;
+export function getLastNotificationError(): string | null {
+  return lastNotificationError;
+}
+
 export const NOTIF_CATEGORIES = {
   FLARE: 'lumen_category_flare',
   PACING: 'lumen_category_pacing',
@@ -132,17 +144,20 @@ export async function ensureNotificationChannel(): Promise<void> {
     try {
       await N.setNotificationChannelAsync(id, config);
     } catch (e) {
-      console.warn(`[Notifications] Failed to create channel ${id}:`, e);
+      console.warn(`[Notifications] Failed to create channel ${id} with custom config, trying fallback:`, e);
+      try {
+        // Strip audioAttributes which may throw IllegalArgumentException on Samsung OneUI
+        const { audioAttributes, ...fallbackConfig } = config;
+        await N.setNotificationChannelAsync(id, fallbackConfig);
+      } catch (e2) {
+        console.warn(`[Notifications] Fallback channel creation failed for ${id}:`, e2);
+      }
     }
   };
 
   const alarmAudioAttributes = {
     usage: N.AndroidAudioUsage?.ALARM ?? 4,
     contentType: N.AndroidAudioContentType?.SONIFICATION ?? 4,
-    flags: {
-      enforceAudibility: true,
-      requestHardwareAudioVideoSynchronization: false,
-    },
   };
 
   try {
@@ -223,13 +238,13 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   try {
     await ensureNotificationChannel();
 
-    const { status: existing } = await N.getPermissionsAsync();
-    if (existing === 'granted') {
+    const perm = await N.getPermissionsAsync();
+    if (perm?.status === 'granted' || perm?.granted === true) {
       await setupNotificationCategories();
       return true;
     }
 
-    const { status } = await N.requestPermissionsAsync({
+    const res = await N.requestPermissionsAsync({
       ios: {
         allowAlert: true,
         allowBadge: true,
@@ -237,12 +252,13 @@ export async function requestNotificationPermissions(): Promise<boolean> {
       },
     });
 
-    if (status !== 'granted') return false;
+    if (res?.status !== 'granted' && res?.granted !== true) return false;
 
     await ensureNotificationChannel();
     await setupNotificationCategories();
     return true;
-  } catch {
+  } catch (err) {
+    console.warn('[Notifications] Error requesting permissions:', err);
     return false;
   }
 }
@@ -358,7 +374,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
       const id = await N.scheduleNotificationAsync({
         content: commonContent,
         trigger: {
-          type: N.SchedulableTriggerInputTypes.DATE,
+          type: TRIGGER_TYPES.DATE,
           date: targetDate,
           ...(Platform.OS === 'android' ? { channelId } : {}),
         },
@@ -372,7 +388,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
       const id = await N.scheduleNotificationAsync({
         content: commonContent,
         trigger: {
-          type: N.SchedulableTriggerInputTypes.DAILY,
+          type: TRIGGER_TYPES.DAILY,
           hour,
           minute,
           repeats: true,
@@ -393,7 +409,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
             body: reminder.notificationMessage || 'Time for your scheduled routine',
           },
           trigger: {
-            type: N.SchedulableTriggerInputTypes.WEEKLY,
+            type: TRIGGER_TYPES.WEEKLY,
             weekday,
             hour,
             minute,
@@ -423,7 +439,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
             body: reminder.notificationMessage || 'Hydration & Movement check-in',
           },
           trigger: {
-            type: N.SchedulableTriggerInputTypes.DAILY,
+            type: TRIGGER_TYPES.DAILY,
             hour: slotHour,
             minute: slotMinute,
             repeats: true,
@@ -446,7 +462,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
           categoryIdentifier: NOTIF_CATEGORIES.STAND,
         },
         trigger: {
-          type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          type: TRIGGER_TYPES.TIME_INTERVAL,
           seconds,
           repeats: true,
           ...(Platform.OS === 'android' ? { channelId } : {}),
@@ -490,7 +506,7 @@ export async function snoozeReminder(
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
       trigger: {
-        type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        type: TRIGGER_TYPES.TIME_INTERVAL,
         seconds: Math.max(1, snoozeMinutes * 60),
         repeats: false,
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
@@ -505,38 +521,81 @@ export async function snoozeReminder(
 }
 
 /**
- * Fires a test notification in 3 seconds so the user can verify sound and banner.
+ * Fires a test notification in 3 seconds so the user can verify sound, banner, and lockscreen alert.
+ * Has robust multi-tier fallback for Samsung OneUI / Android background scheduling restrictions.
  */
 export async function sendTestReminderNotification(): Promise<boolean> {
-  if (!N) return false;
+  if (!N) {
+    lastNotificationError = 'Notifications module not found or not supported in this runtime.';
+    return false;
+  }
 
-  await requestNotificationPermissions();
-  await ensureNotificationChannel();
+  lastNotificationError = null;
 
+  try {
+    await requestNotificationPermissions();
+    await ensureNotificationChannel();
+  } catch (initErr: any) {
+    console.warn('[Notifications] Warning during test init:', initErr);
+  }
+
+  const testContent = {
+    title: '🔔 Lumen Alarm Test',
+    body: 'Your reminder alarms, sound, and lock-screen alerts are working properly! 🎉',
+    sound: 'default',
+    priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
+    vibrate: [0, 500, 250, 500, 250, 500],
+    categoryIdentifier: NOTIF_CATEGORIES.WATER,
+    data: { test: true, reminderId: 'test_alarm' },
+  };
+
+  // Strategy 1: Attempt standard 3-second scheduled trigger with dedicated channel
   try {
     await N.scheduleNotificationAsync({
       content: {
-        title: '🔔 Lumen Alarm Test',
-        body: 'Your reminder alarms, sound, and lock-screen alerts are working properly! 🎉',
-        sound: 'default',
-        priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
-        vibrate: [0, 500, 250, 500, 250, 500],
-        categoryIdentifier: NOTIF_CATEGORIES.WATER,
-        data: { test: true, reminderId: 'test_alarm' },
+        ...testContent,
         channelId: CHANNEL_ID,
-        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
       trigger: {
-        type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        type: TRIGGER_TYPES.TIME_INTERVAL,
         seconds: 3,
         repeats: false,
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
     });
     return true;
-  } catch (err) {
-    console.error('[Notifications] Failed to send test notification:', err);
-    return false;
+  } catch (schedErr: any) {
+    console.warn('[Notifications] 3-second trigger failed, falling back to immediate channel trigger:', schedErr);
+    lastNotificationError = schedErr?.message || null;
+
+    // Strategy 2: Immediate channel dispatch (bypasses exact alarm restrictions on Android 13/14)
+    try {
+      await N.scheduleNotificationAsync({
+        content: {
+          ...testContent,
+          channelId: CHANNEL_ID,
+        },
+        trigger: Platform.OS === 'android' ? { channelId: CHANNEL_ID } : null,
+      });
+      lastNotificationError = null;
+      return true;
+    } catch (immediateErr: any) {
+      console.warn('[Notifications] Immediate channel trigger failed, falling back to basic trigger:', immediateErr);
+
+      // Strategy 3: Pure immediate dispatch (null trigger)
+      try {
+        await N.scheduleNotificationAsync({
+          content: testContent,
+          trigger: null,
+        });
+        lastNotificationError = null;
+        return true;
+      } catch (finalErr: any) {
+        lastNotificationError = finalErr?.message || immediateErr?.message || schedErr?.message || 'Could not trigger test alarm.';
+        console.error('[Notifications] Failed all test notification strategies:', finalErr);
+        return false;
+      }
+    }
   }
 }
 

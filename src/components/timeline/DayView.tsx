@@ -74,12 +74,12 @@ export function DayView({
 
     return Object.keys(map)
       .map(Number)
-      .sort((a, b) => a - b)
+      .sort((a, b) => b - a)
       .map(hour => ({
         hour,
         label: toHourLabel(hour),
         entries: map[hour].sort(
-          (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+          (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
         ),
       }));
   }, [entries]);

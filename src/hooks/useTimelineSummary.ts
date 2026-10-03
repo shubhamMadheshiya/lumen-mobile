@@ -37,7 +37,9 @@ export function useTimelineSummary(year: number, month: number) {
 
       return Object.entries(map).map(([date, info]) => ({ date, ...info }));
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 15 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -53,6 +55,8 @@ export function useDayEntries(date: string) {
       const res = await api.get<any>('/logs', { params: { from, to, limit: 500 } });
       return Array.isArray(res) ? res : (res?.logs ?? res?.data ?? []);
     },
-    staleTime: 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }

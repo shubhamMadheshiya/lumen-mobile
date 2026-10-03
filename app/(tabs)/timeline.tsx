@@ -13,9 +13,10 @@ import {
   Alert,
   TextInput,
   StyleSheet,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Search, X, Camera, RotateCcw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -50,8 +51,27 @@ export default function TimelineScreen() {
   const [filterCatId, setFilterCatId] = useState<string | null>(null);
 
   const { config } = useConfigStore();
-  const { data: summary = [] } = useTimelineSummary(calYear, calMonth);
-  const { data: entries = [], isLoading: entriesLoading } = useDayEntries(selectedDate);
+  const { data: summary = [], refetch: refetchSummary } = useTimelineSummary(calYear, calMonth);
+  const {
+    data: entries = [],
+    isLoading: entriesLoading,
+    refetch: refetchEntries,
+  } = useDayEntries(selectedDate);
+
+  // Automatically update timeline data from API whenever user switches to the Timeline tab
+  useFocusEffect(
+    useCallback(() => {
+      refetchSummary();
+      refetchEntries();
+    }, [refetchSummary, refetchEntries])
+  );
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([refetchSummary(), refetchEntries()]);
+    setRefreshing(false);
+  }, [refetchSummary, refetchEntries]);
 
   const categories = config?.categories ?? [];
   const questions = config?.questions ?? [];
@@ -254,6 +274,14 @@ export default function TimelineScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={palette.primary}
+            colors={[palette.primary]}
+          />
+        }
       >
         {/* Calendar heat map */}
         {showCalendar && (

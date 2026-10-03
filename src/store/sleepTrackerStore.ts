@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDaySessionStore } from './daySessionStore';
 import { api } from '../api/client';
+import { queryClient } from '../api/queryClient';
 import { uuidv4 } from '../utils/uuid';
 
 export type SleepQuality = 'RESTFUL' | 'GOOD' | 'FAIR' | 'POOR';
@@ -225,6 +226,8 @@ export const useSleepTrackerStore = create<SleepTrackerState>((set, get) => ({
             },
           ],
         });
+        queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+        queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
       } catch {
         // Offline or backend unavailable, local state already persisted
       }

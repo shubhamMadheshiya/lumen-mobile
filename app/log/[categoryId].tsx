@@ -22,6 +22,7 @@ import { typography } from '../../src/theme/typography';
 import { QuestionCard } from '../../src/components/QuestionCard';
 import { validateAnswers } from '../../src/utils/validateAnswers';
 import { uploadAnswerImages } from '../../src/utils/uploadAnswerImages';
+import { queryClient } from '../../src/api/queryClient';
 
 function fmt(d: Date): string {
   const h = d.getHours();
@@ -135,6 +136,8 @@ export default function QuestionSheet() {
         answers: allAns,
         note: note.trim() || undefined,
       });
+      queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
       safeGoBack('/(tabs)/today');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong';

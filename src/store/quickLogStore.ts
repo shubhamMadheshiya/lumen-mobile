@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { uuidv4 } from '../utils/uuid';
 import { api } from '../api/client';
+import { queryClient } from '../api/queryClient';
 
 const STORAGE_KEY = 'lumen:quick_log:today_taps_v1';
 
@@ -82,6 +83,8 @@ export const useQuickLogStore = create<QuickLogState>((set, get) => ({
       };
       set({ todayTaps: syncedTaps });
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedTaps)).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
     } catch (err) {
       console.warn('[quickLog] Failed to sync tap, queued for retry:', err);
     }
@@ -108,7 +111,12 @@ export const useQuickLogStore = create<QuickLogState>((set, get) => ({
 
     // Soft-delete on server if we have the serverId
     if (entry.serverId) {
-      api.delete(`/logs/${entry.serverId}`).catch(() => {});
+      api.delete(`/logs/${entry.serverId}`)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+          queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+        })
+        .catch(() => {});
     }
 
     const timer = get().undoTimer;

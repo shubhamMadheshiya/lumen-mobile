@@ -22,6 +22,7 @@ import { useDaySessionStore } from '../src/store/daySessionStore';
 import { useAuthStore } from '../src/store/authStore';
 import { useQuickLogConfigStore, MAX_QUICK_LOG_QUESTIONS } from '../src/store/quickLogConfigStore';
 import { api } from '../src/api/client';
+import { queryClient } from '../src/api/queryClient';
 import { useTheme, createThemedStyles } from '../src/theme/ThemeContext';
 import { typography } from '../src/theme/typography';
 import { QuestionCard } from '../src/components/QuestionCard';
@@ -125,6 +126,9 @@ export default function QuickLogScreen() {
         answers: uploadedAnswers,
         note: note.trim() || undefined,
       });
+
+      queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
 
       safeGoBack('/(tabs)/today');
     } catch (err: unknown) {

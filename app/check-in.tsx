@@ -16,6 +16,7 @@ import { useConfigStore } from '../src/store/configStore';
 import { useDaySessionStore } from '../src/store/daySessionStore';
 import { useAuthStore } from '../src/store/authStore';
 import { api } from '../src/api/client';
+import { queryClient } from '../src/api/queryClient';
 import { uploadAnswerImages } from '../src/utils/uploadAnswerImages';
 import { useTheme, createThemedStyles } from '../src/theme/ThemeContext';
 import { typography } from '../src/theme/typography';
@@ -136,6 +137,8 @@ export default function CheckInModal() {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           answers: uploadedAnswers,
         });
+        queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+        queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
       }
       safeGoBack('/(tabs)/today');
     } catch (err: unknown) {

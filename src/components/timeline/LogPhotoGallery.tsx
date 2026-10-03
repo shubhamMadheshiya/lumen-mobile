@@ -144,8 +144,8 @@ export function LogPhotoGallery({
                 {/* Fallback for broken/inaccessible URL */}
                 {hasError ? (
                   <View style={styles.errorContainer}>
-                    <AlertCircle size={22} color={palette.error ?? '#EF4444'} />
-                    <Text style={[styles.errorSubtext, { color: palette.textTertiary ?? '#9CA3AF' }]}>
+                    <AlertCircle size={22} color={palette.severityHigh ?? '#EF5350'} />
+                    <Text style={[styles.errorSubtext, { color: palette.textDisabled }]}>
                       Unavailable
                     </Text>
                   </View>
@@ -324,7 +324,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.25)',

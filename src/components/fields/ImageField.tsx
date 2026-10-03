@@ -14,10 +14,11 @@ import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 import { permissionService, PermissionType } from '../../services/permissionService';
 import { ContextualPermissionModal } from '../permissions/ContextualPermissionModal';
+import { useResolvedMediaUrls } from '../../services/mediaService';
 
 interface Props {
   field: FieldDefinition;
-  value: string[];          // local URIs
+  value: string[];          // local URIs or mediaIds
   onChange: (uris: string[]) => void;
 }
 
@@ -28,6 +29,7 @@ export function ImageField({ field, value, onChange }: Props) {
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const sensitive = field.sensitive ?? false;
 
+  const { urls: displayUrls } = useResolvedMediaUrls(value);
   const [activePermModal, setActivePermModal] = useState<PermissionType | null>(null);
 
   const launchPicker = async (source: 'camera' | 'gallery') => {
@@ -92,7 +94,7 @@ export function ImageField({ field, value, onChange }: Props) {
           {value.map((uri, idx) => (
             <View key={uri + idx} style={styles.thumbWrapper}>
               <Image
-                source={{ uri }}
+                source={{ uri: displayUrls[idx] || uri }}
                 style={[styles.thumb, sensitive && !revealed[idx] && styles.thumbBlurred]}
                 resizeMode="cover"
               />

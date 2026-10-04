@@ -6,6 +6,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "postprebuild": "node scripts/patchAlarmManifest.js",
     "test": "jest --watchAll",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

@@ -17,7 +17,7 @@ module.exports = {
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: false,
-      bundleIdentifier: 'com.aifalabs.lumen',
+      bundleIdentifier: 'com.lumen.health',
       infoPlist: {
         NSCameraUsageDescription: 'Lumen uses the camera to capture photos of symptoms or body output for tracking purposes.',
         NSPhotoLibraryUsageDescription: 'Lumen accesses your photo library to attach images to log entries.',
@@ -30,7 +30,7 @@ module.exports = {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#FFF8F0',
       },
-      package: 'com.aifalabs.lumen',
+      package: 'com.lumen.health',
       permissions: [
         'CAMERA',
         'READ_MEDIA_IMAGES',

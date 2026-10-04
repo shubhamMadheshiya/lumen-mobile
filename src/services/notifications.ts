@@ -304,12 +304,9 @@ function resolveCategory(category: string): string {
   }
 }
 
-function resolveChannel(category: string): string {
-  switch (category) {
-    case 'MEDICATION': return CHANNEL_ID_CLINICAL;
-    case 'EXERCISE': return CHANNEL_ID_PACING;
-    default: return CHANNEL_ID_HABITS;
-  }
+function resolveChannel(_category: string): string {
+  // Always use the alarm channel — it has VISIBILITY_PUBLIC, bypassDnd, and MAX importance
+  return CHANNEL_ID_ALARM;
 }
 
 function parseTime(timeStr?: string, defaultH = 9, defaultM = 0): { hour: number; minute: number } {
@@ -360,12 +357,13 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     sound: 'default',
     priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
     vibrate: [0, 500, 250, 500, 250, 500],
-    channelId,
+    channelId: CHANNEL_ID_ALARM,
     ...(Platform.OS === 'android' ? {
-      channelId,
+      channelId: CHANNEL_ID_ALARM,
       sticky: false,
       autoDismiss: true,
       fullScreenIntent: true,
+      lockscreenVisibility: N?.AndroidNotificationVisibility?.PUBLIC ?? 1,
     } : {}),
   };
 

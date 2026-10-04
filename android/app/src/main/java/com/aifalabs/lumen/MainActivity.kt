@@ -43,19 +43,29 @@ class MainActivity : ReactActivity() {
   private fun handleAlarmIntent(intent: Intent?) {
     if (intent?.getBooleanExtra("openAlarm", false) == true) {
       val reminderId = intent.getStringExtra("reminderId") ?: return
-      // Post to JS thread after React is ready
-      window.decorView.post {
-        try {
-          val reactContext = (application as MainApplication)
-            .reactNativeHost
-            .reactInstanceManager
-            .currentReactContext
-          reactContext?.getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            ?.emit("LumenAlarmFired", reminderId)
-        } catch (e: Exception) {
-          // React not ready yet — the JS side will read getLastNotificationResponseAsync
+      // Retry until React context is ready (up to 3 seconds)
+      val decorView = window.decorView
+      var attempts = 0
+      val maxAttempts = 15
+      val retryRunnable = object : Runnable {
+        override fun run() {
+          attempts++
+          try {
+            val reactContext = (application as MainApplication)
+              .reactHost
+              .currentReactContext
+            if (reactContext != null) {
+              reactContext.getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                ?.emit("LumenAlarmFired", reminderId)
+            } else if (attempts < maxAttempts) {
+              decorView.postDelayed(this, 200)
+            }
+          } catch (e: Exception) {
+            if (attempts < maxAttempts) decorView.postDelayed(this, 200)
+          }
         }
       }
+      decorView.post(retryRunnable)
     }
   }
 

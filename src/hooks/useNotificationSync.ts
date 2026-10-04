@@ -4,6 +4,7 @@
  */
 import { useEffect } from 'react';
 import { router } from 'expo-router';
+import { Platform, NativeEventEmitter, NativeModules } from 'react-native';
 import { useReminderStore } from '../store/reminderStore';
 import {
   syncReminders,
@@ -55,6 +56,20 @@ export function useNotificationSync() {
       syncReminders(reminders).catch(() => {});
     }
   }, [reminders]);
+
+  // Listen for native AlarmReceiver full-screen intent events (Android lock screen)
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    try {
+      const { DeviceEventEmitter } = require('react-native');
+      const sub = DeviceEventEmitter.addListener('LumenAlarmFired', (reminderId: string) => {
+        if (reminderId) router.push(`/alarm/${reminderId}`);
+      });
+      return () => sub.remove();
+    } catch {
+      return undefined;
+    }
+  }, []);
 
   useEffect(() => {
     if (!N) return;

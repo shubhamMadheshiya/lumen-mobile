@@ -7,11 +7,12 @@
  * - Test alarm function for instant verification.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import { router } from 'expo-router';
 import { IReminder, WeekDay } from '@lumen/shared';
 import { api } from '../api/client';
 import { useQuickLogStore } from '../store/quickLogStore';
+import { scheduleNativeAlarm, cancelNativeAlarm } from './alarmScheduler';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let N: any = null;
@@ -338,6 +339,8 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     }
     delete map[reminder._id];
   }
+  // Also cancel any native exact alarm
+  await cancelNativeAlarm(reminder._id);
 
   // If reminder is disabled or archived, save cleared mapping and exit
   if ((!reminder.enabled && reminder.isActive !== true) || !!reminder.archivedAt) {
@@ -358,7 +361,6 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
     vibrate: [0, 500, 250, 500, 250, 500],
     channelId,
-    // Android full-screen alarm behaviour
     ...(Platform.OS === 'android' ? {
       channelId,
       sticky: false,
@@ -376,7 +378,6 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
       const { hour, minute } = parseTime(reminder.targetTime, 9, 0);
       const targetDate = new Date(`${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
 
-      // If time has passed today, schedule for tomorrow
       if (targetDate.getTime() <= Date.now()) {
         targetDate.setDate(targetDate.getDate() + 1);
       }
@@ -390,6 +391,13 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
         },
       });
       scheduledIds.push(id);
+      // Schedule native exact alarm for lock-screen delivery
+      await scheduleNativeAlarm(
+        reminder._id,
+        commonContent.title,
+        commonContent.body,
+        targetDate.getTime(),
+      );
     }
     // 2. DAILY
     else if (scheduleType === 'DAILY' || (reminder.type === 'time' && reminder.schedule)) {
@@ -406,6 +414,17 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
         },
       });
       scheduledIds.push(id);
+      // Schedule native exact alarm for today (or tomorrow if time passed)
+      const now = new Date();
+      const target = new Date();
+      target.setHours(hour, minute, 0, 0);
+      if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+      await scheduleNativeAlarm(
+        reminder._id,
+        commonContent.title,
+        commonContent.body,
+        target.getTime(),
+      );
     }
     // 3. WEEKLY / CUSTOM DAYS
     else if ((scheduleType === 'WEEKLY' || scheduleType === 'CUSTOM_DAYS') && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
@@ -671,6 +690,7 @@ export async function cancelReminder(reminderId: string): Promise<void> {
     delete map[reminderId];
     await saveMapping(map);
   }
+  await cancelNativeAlarm(reminderId);
 }
 
 /**

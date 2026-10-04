@@ -2,6 +2,7 @@ package com.aifalabs.lumen
 
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -12,13 +13,10 @@ import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
-    // Set the theme to AppTheme BEFORE onCreate to support
-    // coloring the background, status bar, and navigation bar.
-    // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
 
-    // Allow alarm notifications and reminders to wake the screen and display over the lock screen
+    // Allow alarm notifications to wake screen and show over lock screen
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
         setShowWhenLocked(true)
@@ -31,8 +29,33 @@ class MainActivity : ReactActivity() {
           android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         )
       }
-    } catch (e: Exception) {
-      // Defensive fallback if restricted by device policy or vendor ROM
+    } catch (e: Exception) {}
+
+    // Handle launch from AlarmReceiver full-screen intent
+    handleAlarmIntent(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    handleAlarmIntent(intent)
+  }
+
+  private fun handleAlarmIntent(intent: Intent?) {
+    if (intent?.getBooleanExtra("openAlarm", false) == true) {
+      val reminderId = intent.getStringExtra("reminderId") ?: return
+      // Post to JS thread after React is ready
+      window.decorView.post {
+        try {
+          val reactContext = (application as MainApplication)
+            .reactNativeHost
+            .reactInstanceManager
+            .currentReactContext
+          reactContext?.getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            ?.emit("LumenAlarmFired", reminderId)
+        } catch (e: Exception) {
+          // React not ready yet — the JS side will read getLastNotificationResponseAsync
+        }
+      }
     }
   }
 

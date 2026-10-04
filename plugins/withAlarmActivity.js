@@ -7,7 +7,7 @@
  *   android:showWhenLocked="true"   — display over lock screen
  *   android:turnScreenOn="true"     — wake the screen when alarm fires
  */
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest } = require('expo/config-plugins');
 
 module.exports = withAndroidManifest(config => {
   const manifest = config.modResults;

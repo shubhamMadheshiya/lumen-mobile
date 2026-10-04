@@ -52,6 +52,7 @@ module.exports = ({ config }) => ({
   plugins: [
     'expo-router',
     'expo-secure-store',
+    '@react-native-google-signin/google-signin',
     [
       'expo-notifications',
       {

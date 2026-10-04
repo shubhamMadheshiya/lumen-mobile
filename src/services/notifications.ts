@@ -174,7 +174,11 @@ export async function ensureNotificationChannel(): Promise<void> {
         enableVibrate: true,
         bypassDnd: true,
         lockscreenVisibility: N.AndroidNotificationVisibility?.PUBLIC ?? 1,
-        audioAttributes: alarmAudioAttributes,
+        audioAttributes: {
+          usage: N.AndroidAudioUsage?.ALARM ?? 4,
+          contentType: N.AndroidAudioContentType?.SONIFICATION ?? 4,
+          flags: { enforceAudibility: true },
+        },
       }),
       // 2. Clinical Channel (MAX importance, high alert chime & vibration)
       createChannelSafe(CHANNEL_ID_CLINICAL, {
@@ -354,7 +358,13 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
     vibrate: [0, 500, 250, 500, 250, 500],
     channelId,
-    ...(Platform.OS === 'android' ? { channelId } : {}),
+    // Android full-screen alarm behaviour
+    ...(Platform.OS === 'android' ? {
+      channelId,
+      sticky: false,
+      autoDismiss: true,
+      fullScreenIntent: true,
+    } : {}),
   };
 
   try {

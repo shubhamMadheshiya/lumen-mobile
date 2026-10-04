@@ -59,8 +59,13 @@ module.exports = {
         {
           icon: './assets/notification-icon.png',
           color: '#FF6B35',
+          sounds: [],
+          androidMode: 'default',
+          androidCollapsedTitle: 'Lumen Reminder',
+          iosDisplayInForeground: true,
         },
       ],
+      './plugins/withAlarmActivity',
       [
         'expo-local-authentication',
         {

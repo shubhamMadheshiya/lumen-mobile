@@ -34,7 +34,7 @@ try {
 }
 
 const MAPPING_KEY = 'lumen:notif:mapping_v2'; // { reminderId: string[] (notificationIds) }
-export const CHANNEL_ID_ALARM = 'lumen_alarm_clock_v2';
+export const CHANNEL_ID_ALARM = 'lumen_alarm_clock_v3';
 export const CHANNEL_ID_CLINICAL = 'lumen_clinical_flare_v2';
 export const CHANNEL_ID_HABITS = 'lumen_habits_v2';
 export const CHANNEL_ID_PACING = 'lumen_pacing_v2';

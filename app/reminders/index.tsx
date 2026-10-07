@@ -19,7 +19,12 @@ import { typography } from '../../src/theme/typography';
 import { useReminderStore } from '../../src/store/reminderStore';
 import { useWeatherStore } from '../../src/store/weatherStore';
 import { useActivityStore } from '../../src/store/activityStore';
-import { sendTestReminderNotification, requestNotificationPermissions, getLastNotificationError } from '../../src/services/notifications';
+import {
+  sendTestReminderNotification,
+  getLastNotificationError,
+  getAlarmDeliveryCapabilities,
+} from '../../src/services/notifications';
+import { openExactAlarmSettings, openFullScreenIntentSettings } from '../../src/services/alarmScheduler';
 import { IReminder, ReminderCategory } from '@lumen/shared';
 import { permissionService } from '../../src/services/permissionService';
 import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
@@ -89,6 +94,29 @@ export default function RemindersScreen() {
   const [pendingToggleId, setPendingToggleId] = useState<string | null>(null);
 
   const runTestAlarm = async () => {
+    const capabilities = await getAlarmDeliveryCapabilities();
+    if (!capabilities.exactAlarmsAllowed) {
+      Alert.alert(
+        'Allow Alarms & Reminders',
+        'Android has blocked exact alarms for Lumen. Enable “Alarms & reminders” so scheduled reminders ring on time, then run the test again.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => { openExactAlarmSettings().catch(() => {}); } },
+        ],
+      );
+      return;
+    }
+    if (!capabilities.fullScreenIntentAllowed) {
+      Alert.alert(
+        'Allow Full-Screen Alarms',
+        'Android has blocked Lumen from showing alarms over the lock screen. Enable “Full-screen notifications” for Lumen, then run the test again.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => { openFullScreenIntentSettings().catch(() => {}); } },
+        ],
+      );
+      return;
+    }
     setIsTestingAlarm(true);
     const success = await sendTestReminderNotification();
     setIsTestingAlarm(false);

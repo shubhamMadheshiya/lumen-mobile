@@ -12,7 +12,12 @@ import { router } from 'expo-router';
 import { IReminder, WeekDay } from '@lumen/shared';
 import { api } from '../api/client';
 import { useQuickLogStore } from '../store/quickLogStore';
-import { scheduleNativeAlarm, cancelNativeAlarm } from './alarmScheduler';
+import {
+  scheduleNativeAlarm,
+  cancelNativeAlarm,
+  getAlarmCapabilities,
+  type AlarmCapabilities,
+} from './alarmScheduler';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let N: any = null;
@@ -34,7 +39,10 @@ try {
 }
 
 const MAPPING_KEY = 'lumen:notif:mapping_v2'; // { reminderId: string[] (notificationIds) }
-export const CHANNEL_ID_ALARM = 'lumen_alarm_clock_v3';
+// Channel settings (notably sound) are immutable after Android creates a channel.
+// v4 is deliberately new so installs that created the old silent/default channel
+// receive the native alarm audio configuration below.
+export const CHANNEL_ID_ALARM = 'lumen_alarm_clock_v4';
 export const CHANNEL_ID_CLINICAL = 'lumen_clinical_flare_v2';
 export const CHANNEL_ID_HABITS = 'lumen_habits_v2';
 export const CHANNEL_ID_PACING = 'lumen_pacing_v2';
@@ -304,9 +312,11 @@ function resolveCategory(category: string): string {
   }
 }
 
-function resolveChannel(_category: string): string {
+function resolveChannel(category: string): string {
   // Always use the alarm channel — it has VISIBILITY_PUBLIC, bypassDnd, and MAX importance
-  return CHANNEL_ID_ALARM;
+  if (category === 'MEDICATION') return CHANNEL_ID_CLINICAL;
+  if (category === 'EXERCISE') return CHANNEL_ID_PACING;
+  return CHANNEL_ID_HABITS;
 }
 
 function parseTime(timeStr?: string, defaultH = 9, defaultM = 0): { hour: number; minute: number } {
@@ -318,6 +328,28 @@ function parseTime(timeStr?: string, defaultH = 9, defaultM = 0): { hour: number
     hour: isNaN(h) ? defaultH : Math.min(23, Math.max(0, h)),
     minute: isNaN(m) ? defaultM : Math.min(59, Math.max(0, m)),
   };
+}
+
+function toMinuteOfDay(hour: number, minute: number): number {
+  return hour * 60 + minute;
+}
+
+function nextOccurrenceAt(timesOfDayMinutes: number[], daysOfWeek?: number[]): number {
+  const now = new Date();
+  const allowedDays = daysOfWeek && daysOfWeek.length > 0 ? new Set(daysOfWeek) : null;
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const candidateDay = new Date(now);
+    candidateDay.setDate(now.getDate() + offset);
+    // JS Sunday=0, whereas Android/Expo weekday values use Sunday=1.
+    if (allowedDays && !allowedDays.has(candidateDay.getDay() + 1)) continue;
+    for (const minuteOfDay of timesOfDayMinutes) {
+      const candidate = new Date(candidateDay);
+      candidate.setHours(Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0);
+      if (candidate.getTime() > now.getTime()) return candidate.getTime();
+    }
+  }
+  // A non-empty schedule always has an occurrence within a week. This is a safe fallback.
+  return now.getTime() + 24 * 60 * 60 * 1000;
 }
 
 /**
@@ -357,9 +389,9 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
     sound: 'default',
     priority: N?.AndroidNotificationPriority?.MAX ?? 'max',
     vibrate: [0, 500, 250, 500, 250, 500],
-    channelId: CHANNEL_ID_ALARM,
+    channelId,
     ...(Platform.OS === 'android' ? {
-      channelId: CHANNEL_ID_ALARM,
+      channelId,
       sticky: false,
       autoDismiss: true,
       fullScreenIntent: true,
@@ -413,15 +445,12 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
       });
       scheduledIds.push(id);
       // Schedule native exact alarm for today (or tomorrow if time passed)
-      const now = new Date();
-      const target = new Date();
-      target.setHours(hour, minute, 0, 0);
-      if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
       await scheduleNativeAlarm(
         reminder._id,
         commonContent.title,
         commonContent.body,
-        target.getTime(),
+        nextOccurrenceAt([toMinuteOfDay(hour, minute)]),
+        { timesOfDayMinutes: [toMinuteOfDay(hour, minute)] },
       );
     }
     // 3. WEEKLY / CUSTOM DAYS
@@ -446,6 +475,15 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
         });
         scheduledIds.push(id);
       }
+      const timeOfDay = toMinuteOfDay(hour, minute);
+      const daysOfWeek = reminder.daysOfWeek.map(day => WEEKDAY_TO_NUMBER[day] || 2);
+      await scheduleNativeAlarm(
+        reminder._id,
+        commonContent.title,
+        commonContent.body,
+        nextOccurrenceAt([timeOfDay], daysOfWeek),
+        { timesOfDayMinutes: [timeOfDay], daysOfWeek },
+      );
     }
     // 4. INTERVAL (e.g. 08:00 to 22:00 every X minutes)
     else if (scheduleType === 'INTERVAL') {
@@ -456,6 +494,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
       const startTotalMinutes = startH * 60 + startM;
       const endTotalMinutes = endH * 60 + endM;
 
+      const timesOfDayMinutes: number[] = [];
       for (let m = startTotalMinutes; m <= endTotalMinutes; m += intervalMin) {
         const slotHour = Math.floor(m / 60);
         const slotMinute = m % 60;
@@ -474,6 +513,16 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
           },
         });
         scheduledIds.push(id);
+        timesOfDayMinutes.push(m);
+      }
+      if (timesOfDayMinutes.length > 0) {
+        await scheduleNativeAlarm(
+          reminder._id,
+          commonContent.title,
+          commonContent.body,
+          nextOccurrenceAt(timesOfDayMinutes),
+          { timesOfDayMinutes },
+        );
       }
     }
     // 5. INACTIVITY / STAND
@@ -539,6 +588,14 @@ export async function snoozeReminder(
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
     });
+    // A snoozed reminder is also an alarm: use AlarmManager so it can wake a
+    // locked device instead of relying solely on a background notification.
+    await scheduleNativeAlarm(
+      reminderId,
+      title ? `⏱ (Snoozed) ${title}` : '⏱ Reminder Snoozed',
+      message || `Snoozed for ${snoozeMinutes} minutes`,
+      Date.now() + Math.max(1, snoozeMinutes * 60) * 1000,
+    );
 
     // Notify backend
     api.post(`/reminders/${reminderId}/snooze`, { snoozeMinutes }).catch(() => {});
@@ -590,6 +647,12 @@ export async function sendTestReminderNotification(): Promise<boolean> {
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
       },
     });
+    await scheduleNativeAlarm(
+      'test_alarm',
+      '🔔 Lumen Alarm Test',
+      'Your reminder alarms, sound, and lock-screen alerts are working properly!',
+      Date.now() + 3_000,
+    );
     return true;
   } catch (schedErr: any) {
     console.warn('[Notifications] 3-second trigger failed, falling back to immediate channel trigger:', schedErr);
@@ -672,6 +735,11 @@ export async function checkNotificationAlarmStatus(): Promise<{
       scheduledCount: 0,
     };
   }
+}
+
+/** Exposes the two Android system grants that local notifications cannot request. */
+export async function getAlarmDeliveryCapabilities(): Promise<AlarmCapabilities> {
+  return getAlarmCapabilities();
 }
 
 /**
@@ -879,4 +947,3 @@ export async function syncReminders(reminders: IReminder[]): Promise<void> {
     await scheduleReminder(r);
   }
 }
-

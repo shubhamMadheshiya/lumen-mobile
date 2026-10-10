@@ -12,12 +12,13 @@ import React, { useEffect, useCallback, useState, useRef, useMemo } from 'react'
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, RefreshControl, useWindowDimensions,
+  NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import {
   Footprints,
   Play,
@@ -30,6 +31,7 @@ import {
   Moon,
   Timer,
   SlidersHorizontal,
+  Plus,
 } from 'lucide-react-native';
 
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
@@ -60,7 +62,8 @@ export default function TodayScreen() {
   const { user, fetchProfile } = useAuthStore();
   const { config, fetchConfig } = useConfigStore();
   const { todaySession, fetchTodaySession } = useDaySessionStore();
-  const { todayTaps, fetchTodayTaps } = useQuickLogStore();
+  const { todayTaps, fetchTodayTaps, tap } = useQuickLogStore();
+  const [activeGlanceIndex, setActiveGlanceIndex] = useState(0);
   const { todaySummary, fetchTodaySummary, isTracking, activePacingAlert } = useActivityStore();
   const { reminders, fetchReminders } = useReminderStore();
   const { fetchGlanceConfig, isMetricEnabled, getActiveCount } = useGlanceConfigStore();
@@ -168,97 +171,94 @@ export default function TodayScreen() {
     router.push('/walking/active');
   };
 
-  const otherGlanceCards = useMemo<GlanceItem[]>(() => {
-    const cards: GlanceItem[] = [];
+  const reminderItem: GlanceItem | null = useMemo(() => {
+    if (!isMetricEnabled('reminders')) return null;
+    return {
+      id: 'reminders',
+      icon: Bell,
+      value: `${reminders.filter(r => r.enabled).length} active`,
+      label: 'Reminders',
+      subtitle: reminders.length > 0 ? `${reminders.length} total` : 'None set',
+      color: '#9333EA',
+      onPress: () => router.push('/reminders?mode=reminders'),
+    };
+  }, [isMetricEnabled, reminders]);
 
-    // 1. Reminders (Purple border - matches top right card in reference design)
-    if (isMetricEnabled('reminders')) {
-      cards.push({
-        id: 'reminders',
-        icon: Bell,
-        value: `${reminders.filter(r => r.enabled).length} active`,
-        label: 'Reminders',
-        subtitle: reminders.length > 0 ? `${reminders.length} total` : 'None set',
-        color: '#9333EA',
-        onPress: () => router.push('/reminders?mode=reminders'),
-      });
-    }
+  const walkingItem: GlanceItem | null = useMemo(() => {
+    if (!isMetricEnabled('walking')) return null;
+    return {
+      id: 'walking',
+      icon: Footprints,
+      value: `${todayDistanceKm.toFixed(1)} km`,
+      label: 'Walking',
+      subtitle: isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`,
+      color: '#EA580C',
+      onPress: handleStartWalking,
+    };
+  }, [isMetricEnabled, todayDistanceKm, isTracking, todayWalkingMinutes, handleStartWalking]);
 
-    // 2. Walking (Orange border - matches bottom right card in reference design)
-    if (isMetricEnabled('walking')) {
-      cards.push({
-        id: 'walking',
-        icon: Footprints,
-        value: `${todayDistanceKm.toFixed(1)} km`,
-        label: 'Walking',
-        subtitle: isTracking ? 'Tracking live' : `${todayWalkingMinutes} min`,
-        color: '#EA580C',
-        onPress: handleStartWalking,
-      });
-    }
+  const quickTapItem: GlanceItem | null = useMemo(() => {
+    if (!isMetricEnabled('quick_logs')) return null;
+    return {
+      id: 'quick_logs',
+      icon: Stethoscope,
+      value: `${totalTapCount} logged`,
+      label: 'Quick taps',
+      subtitle: `${distinctTapCount} metrics`,
+      color: '#E11D48',
+      onPress: () => router.push('/(tabs)/timeline'),
+    };
+  }, [isMetricEnabled, totalTapCount, distinctTapCount]);
 
-    // 3. Quick taps (Rose border)
-    if (isMetricEnabled('quick_logs')) {
-      cards.push({
-        id: 'quick_logs',
-        icon: Stethoscope,
-        value: `${totalTapCount} logged`,
-        label: 'Quick taps',
-        subtitle: `${distinctTapCount} metrics`,
-        color: '#E11D48',
-        onPress: () => router.push('/(tabs)/timeline'),
-      });
-    }
+  const activeTimeItem: GlanceItem | null = useMemo(() => {
+    if (!isMetricEnabled('active_time')) return null;
+    return {
+      id: 'active_time',
+      icon: Timer,
+      value: `${todayWalkingMinutes}m`,
+      label: 'Active time',
+      subtitle: todayWalkingMinutes > 0 ? 'Today' : 'Start now',
+      color: '#0EA5E9',
+      onPress: handleStartWalking,
+    };
+  }, [isMetricEnabled, todayWalkingMinutes, handleStartWalking]);
 
-    // 4. Sleep session (Indigo border)
-    if (isMetricEnabled('day_session')) {
-      cards.push({
-        id: 'day_session',
-        icon: isSleeping ? Moon : (lastSleepRecord ? Moon : (wakeTimeStr ? Sun : Moon)),
-        value: isSleeping
-          ? 'In bed'
-          : lastSleepRecord
-            ? `${Math.floor(lastSleepRecord.durationMinutes / 60)}h ${lastSleepRecord.durationMinutes % 60}m`
-            : (wakeTimeStr || 'Clock in'),
-        label: 'Sleep session',
-        subtitle: isSleeping
-          ? 'Sleeping now'
-          : lastSleepRecord
-            ? (lastSleepRecord.durationMinutes >= 420 ? '7–8h goal met' : 'Under 7h goal')
-            : (todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')),
-        color: isSleeping
-          ? '#6366F1'
-          : lastSleepRecord?.durationMinutes && lastSleepRecord.durationMinutes >= 420
-            ? '#10B981'
-            : '#6366F1',
-        onPress: () => {
-          if (isDaytimeMode) {
-            router.push('/settings');
-          } else {
-            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-          }
-        },
-      });
-    }
+  const sleepItem: GlanceItem | null = useMemo(() => {
+    if (!isMetricEnabled('day_session')) return null;
+    return {
+      id: 'day_session',
+      icon: isSleeping ? Moon : (lastSleepRecord ? Moon : (wakeTimeStr ? Sun : Moon)),
+      value: isSleeping
+        ? 'In bed'
+        : lastSleepRecord
+          ? `${Math.floor(lastSleepRecord.durationMinutes / 60)}h ${lastSleepRecord.durationMinutes % 60}m`
+          : (wakeTimeStr || 'Clock in'),
+      label: 'Sleep session',
+      subtitle: isSleeping
+        ? 'Sleeping now'
+        : lastSleepRecord
+          ? (lastSleepRecord.durationMinutes >= 420 ? '7–8h goal met' : 'Under 7h goal')
+          : (todaySession?.sleepTime ? 'Asleep' : (wakeTimeStr ? 'Active' : 'Not started')),
+      color: isSleeping
+        ? '#6366F1'
+        : lastSleepRecord?.durationMinutes && lastSleepRecord.durationMinutes >= 420
+          ? '#10B981'
+          : '#6366F1',
+      onPress: () => {
+        if (isDaytimeMode) {
+          router.push('/settings');
+        } else {
+          scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        }
+      },
+    };
+  }, [isMetricEnabled, isSleeping, lastSleepRecord, wakeTimeStr, todaySession, isDaytimeMode]);
 
-    // 5. Active time (Cyan border)
-    if (isMetricEnabled('active_time')) {
-      cards.push({
-        id: 'active_time',
-        icon: Timer,
-        value: `${todayWalkingMinutes}m`,
-        label: 'Active time',
-        subtitle: todayWalkingMinutes > 0 ? 'Today' : 'Start now',
-        color: '#0EA5E9',
-        onPress: handleStartWalking,
-      });
-    }
-
-    // 6. Custom Quick Actions with daily goals
-    customGoalActions.forEach(action => {
+  const customGoalItems = useMemo<GlanceItem[]>(() => {
+    return customGoalActions.map(action => {
       const count = todayTaps[action._id]?.count ?? 0;
       const target = action.dailyGoal ? Math.round(action.dailyGoal / (action.defaultValue ?? 1)) : 1;
-      cards.push({
+      return {
         id: action._id,
         emoji: action.icon || '🎯',
         value: `${count}/${target}`,
@@ -266,35 +266,32 @@ export default function TodayScreen() {
         subtitle: `${Math.min(100, Math.round((count / target) * 100))}% goal`,
         color: action.color || palette.primary,
         onPress: () => router.push('/log'),
-      });
+      };
     });
+  }, [customGoalActions, todayTaps, palette.primary]);
 
-    return cards;
-  }, [
-    isMetricEnabled,
-    reminders,
-    todayDistanceKm,
-    isTracking,
-    todayWalkingMinutes,
-    totalTapCount,
-    distinctTapCount,
-    isSleeping,
-    lastSleepRecord,
-    wakeTimeStr,
-    todaySession,
-    isDaytimeMode,
-    customGoalActions,
-    todayTaps,
-    palette.primary,
-  ]);
+  const hasSlide1 = isMetricEnabled('water') || !!reminderItem || !!walkingItem;
+  const hasSlide2 = !!quickTapItem || !!activeTimeItem || !!sleepItem || customGoalItems.length > 0;
+  const extraCustomItems = customGoalItems.slice(1);
+  const extraCustomSlidesCount = Math.ceil(extraCustomItems.length / 2);
 
-  const glanceColumns = useMemo(() => {
-    const cols: GlanceItem[][] = [];
-    for (let i = 0; i < otherGlanceCards.length; i += 2) {
-      cols.push(otherGlanceCards.slice(i, i + 2));
-    }
-    return cols;
-  }, [otherGlanceCards]);
+  const totalGlancePages = (hasSlide1 ? 1 : 0) + (hasSlide2 ? 1 : 0) + extraCustomSlidesCount;
+
+  const slideWidth = Math.max(280, windowWidth - 32);
+  const cardColWidth = Math.max(136, Math.floor((slideWidth - 10) / 2));
+
+  const handleGlanceScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const snapDistance = slideWidth + 12;
+    const index = Math.round(offsetX / snapDistance);
+    setActiveGlanceIndex(Math.max(0, Math.min(index, Math.max(1, totalGlancePages) - 1)));
+  }, [slideWidth, totalGlancePages]);
+
+  const handleQuickWaterAdd = useCallback(async () => {
+    if (!waterAction) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await tap(waterAction._id);
+  }, [waterAction, tap]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -458,6 +455,23 @@ export default function TodayScreen() {
                   }
                 />
               ))}
+              {visibleActions.length % 3 !== 0 && (
+                <View style={[styles.quickActionWrapper, { width: quickActionWidth }]}>
+                  <TouchableOpacity
+                    style={styles.addQuickActionButton}
+                    onPress={() => router.push('/customize/quick-actions')}
+                    activeOpacity={0.75}
+                    accessibilityLabel="Add quick action"
+                    accessibilityRole="button"
+                  >
+                    <View style={styles.addQuickActionWell}>
+                      <Plus size={20} color={palette.primary} strokeWidth={2.4} />
+                    </View>
+                    <Text style={styles.addQuickActionLabel} numberOfLines={1}>Add action</Text>
+                    <Text style={styles.addQuickActionSub} numberOfLines={1}>Customize</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -492,7 +506,7 @@ export default function TodayScreen() {
           </View>
 
           {/* Empty state when all metrics are hidden */}
-          {getActiveCount() === 0 && customGoalActions.length === 0 ? (
+          {!hasSlide1 && !hasSlide2 ? (
             <TouchableOpacity
               style={styles.emptyGlanceBox}
               onPress={() => router.push('/customize/at-a-glance')}
@@ -504,41 +518,122 @@ export default function TodayScreen() {
               </Text>
             </TouchableOpacity>
           ) : (
-            <View style={styles.glanceRowContainer}>
-              {/* Featured Water Card */}
-              {isMetricEnabled('water') && (
-                <FeaturedWaterCard
-                  count={waterCount}
-                  goal={waterGoal}
-                  onManage={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedWaterActionId(waterAction?._id);
-                    setWaterModalVisible(true);
-                  }}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedWaterActionId(waterAction?._id);
-                    setWaterModalVisible(true);
-                  }}
-                />
-              )}
+            <View>
+              <View style={styles.glanceSliderContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.glanceSliderScroll}
+                  snapToInterval={slideWidth + 12}
+                  decelerationRate="fast"
+                  onScroll={handleGlanceScroll}
+                  scrollEventThrottle={16}
+                >
+                  {/* Slide 1: Water (left) + Reminder & Walking (right) */}
+                  {hasSlide1 && (
+                    <View style={[styles.glanceSlide, { width: slideWidth }]}>
+                      {isMetricEnabled('water') && (
+                        <FeaturedWaterCard
+                          width={cardColWidth}
+                          count={waterCount}
+                          goal={waterGoal}
+                          onQuickAdd={handleQuickWaterAdd}
+                          onManage={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setSelectedWaterActionId(waterAction?._id);
+                            setWaterModalVisible(true);
+                          }}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setSelectedWaterActionId(waterAction?._id);
+                            setWaterModalVisible(true);
+                          }}
+                        />
+                      )}
 
-              {/* 2-Row Horizontal Slider for Other Cards */}
-              {otherGlanceCards.length > 0 && (
-                <View style={styles.glanceSliderContainer}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.glanceSliderScroll}
-                  >
-                    {glanceColumns.map((col, colIdx) => (
-                      <View key={`glance-col-${colIdx}`} style={styles.glanceColumn}>
-                        {col.map(item => (
-                          <CompactGlanceCard key={item.id} item={item} />
-                        ))}
+                      <View style={[styles.glanceColumn, { width: isMetricEnabled('water') ? cardColWidth : slideWidth }]}>
+                        {reminderItem && (
+                          <CompactGlanceCard item={reminderItem} width={isMetricEnabled('water') ? cardColWidth : slideWidth} />
+                        )}
+                        {walkingItem && (
+                          <CompactGlanceCard item={walkingItem} width={isMetricEnabled('water') ? cardColWidth : slideWidth} />
+                        )}
                       </View>
-                    ))}
-                  </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Slide 2: Quick tap & Active Time (left) + Sleep session & (Custom Goal or Customize card) (right) */}
+                  {hasSlide2 && (
+                    <View style={[styles.glanceSlide, { width: slideWidth }]}>
+                      {/* Left Column: Quick tap & Active Time */}
+                      <View style={[styles.glanceColumn, { width: cardColWidth }]}>
+                        {quickTapItem && (
+                          <CompactGlanceCard item={quickTapItem} width={cardColWidth} />
+                        )}
+                        {activeTimeItem && (
+                          <CompactGlanceCard item={activeTimeItem} width={cardColWidth} />
+                        )}
+                      </View>
+
+                      {/* Right Column: Sleep session & (Custom Goal or Customize card) */}
+                      <View style={[styles.glanceColumn, { width: cardColWidth }]}>
+                        {sleepItem && (
+                          <CompactGlanceCard item={sleepItem} width={cardColWidth} />
+                        )}
+                        {customGoalItems.length > 0 ? (
+                          <CompactGlanceCard item={customGoalItems[0]} width={cardColWidth} />
+                        ) : (
+                          <TouchableOpacity
+                            style={[styles.compactGlanceCard, styles.addMetricCard, { width: cardColWidth }]}
+                            onPress={() => router.push('/customize/at-a-glance')}
+                            activeOpacity={0.75}
+                            accessibilityRole="button"
+                            accessibilityLabel="Customize glance metrics"
+                          >
+                            <View style={styles.addMetricTop}>
+                              <View style={styles.addMetricIconBox}>
+                                <SlidersHorizontal size={14} color={palette.primary} strokeWidth={2.4} />
+                              </View>
+                              <ChevronRight size={13} color={palette.textDisabled} />
+                            </View>
+                            <View style={styles.compactCardBottom}>
+                              <Text style={styles.compactLabel}>Customize</Text>
+                              <Text style={styles.compactSubtitle}>Add more metrics</Text>
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Extra Slides if user has multiple custom goal actions */}
+                  {extraCustomSlidesCount > 0 &&
+                    Array.from({ length: extraCustomSlidesCount }).map((_, slideIdx) => {
+                      const pair = extraCustomItems.slice(slideIdx * 2, slideIdx * 2 + 2);
+                      return (
+                        <View key={`extra-slide-${slideIdx}`} style={[styles.glanceSlide, { width: slideWidth }]}>
+                          <View style={[styles.glanceColumn, { width: cardColWidth }]}>
+                            {pair[0] && <CompactGlanceCard item={pair[0]} width={cardColWidth} />}
+                            {pair[1] && <CompactGlanceCard item={pair[1]} width={cardColWidth} />}
+                          </View>
+                        </View>
+                      );
+                    })}
+                </ScrollView>
+              </View>
+
+              {/* Slider pagination dots */}
+              {totalGlancePages > 1 && (
+                <View style={styles.glancePaginationRow}>
+                  {Array.from({ length: totalGlancePages }).map((_, dotIdx) => (
+                    <View
+                      key={`glance-dot-${dotIdx}`}
+                      style={[
+                        styles.glanceDot,
+                        activeGlanceIndex === dotIdx && styles.glanceDotActive,
+                      ]}
+                    />
+                  ))}
                 </View>
               )}
             </View>
@@ -584,17 +679,19 @@ interface GlanceItem {
 interface FeaturedWaterCardProps {
   count: number;
   goal: number;
+  width?: number;
   onManage: () => void;
   onPress: () => void;
+  onQuickAdd?: () => void;
 }
 
-function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCardProps) {
-  const { colorScheme } = useTheme();
+function FeaturedWaterCard({ count, goal, onManage, onPress, onQuickAdd, width }: FeaturedWaterCardProps) {
+  const { colorScheme, palette } = useTheme();
   const styles = useStyles();
   const isDark = colorScheme === 'dark';
 
-  const size = 84;
-  const strokeWidth = 7;
+  const size = 80;
+  const strokeWidth = 6.5;
   const center = size / 2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -604,12 +701,11 @@ function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCard
   const pct = goal > 0 ? (count / goal) * 100 : 0;
   const pctStr = `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}% goal`;
 
-  const trackColor = isDark ? '#0E749033' : '#E0F2FE';
-  const progressColor = '#06B6D4';
+  const trackColor = isDark ? '#0E749022' : '#E2E8F0';
 
   return (
     <TouchableOpacity
-      style={styles.featuredWaterCard}
+      style={[styles.featuredWaterCard, width ? { width } : null]}
       onPress={onPress}
       activeOpacity={0.85}
       accessibilityRole="button"
@@ -618,6 +714,12 @@ function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCard
       <View style={styles.waterCardTopRow}>
         <View style={styles.waterRingWrapper}>
           <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+            <Defs>
+              <SvgGradient id="waterProgressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <Stop offset="0%" stopColor="#22D3EE" />
+                <Stop offset="100%" stopColor="#0284C7" />
+              </SvgGradient>
+            </Defs>
             <Circle
               cx={center}
               cy={center}
@@ -626,17 +728,19 @@ function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCard
               strokeWidth={strokeWidth}
               fill="none"
             />
-            <Circle
-              cx={center}
-              cy={center}
-              r={radius}
-              stroke={progressColor}
-              strokeWidth={strokeWidth}
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="none"
-            />
+            {progress > 0 && (
+              <Circle
+                cx={center}
+                cy={center}
+                r={radius}
+                stroke="url(#waterProgressGrad)"
+                strokeWidth={strokeWidth}
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                fill="none"
+              />
+            )}
           </Svg>
           <View style={styles.waterRingCenterText}>
             <Text style={styles.waterRingCount}>{`${count}/${goal}`}</Text>
@@ -644,15 +748,28 @@ function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCard
           </View>
         </View>
 
-        <View style={styles.waterBadgeBox}>
-          <Droplets size={22} color="#0EA5E9" strokeWidth={2.2} />
-        </View>
+        <TouchableOpacity
+          style={styles.waterBadgeBox}
+          onPress={onQuickAdd || onPress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Quick log 1 glass of water"
+        >
+          <Droplets size={19} color="#0284C7" strokeWidth={2.2} />
+          <View style={styles.waterPlusBadge}>
+            <Plus size={8} color="#FFFFFF" strokeWidth={3} />
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.waterCardBottomRow}>
         <View style={styles.waterMetaCol}>
           <Text style={styles.waterMetaTitle}>Water</Text>
-          <Text style={styles.waterMetaPercent}>{pctStr}</Text>
+          <View style={[styles.waterGoalPill, pct > 0 && styles.waterGoalPillActive]}>
+            <Text style={[styles.waterMetaPercent, pct > 0 && styles.waterMetaPercentActive]}>
+              {pctStr}
+            </Text>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -662,6 +779,7 @@ function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCard
           accessibilityRole="button"
           accessibilityLabel="Manage water intake"
         >
+          <SlidersHorizontal size={10} color={isDark ? '#CBD5E1' : '#475569'} />
           <Text style={styles.waterManageBtnText}>Manage</Text>
         </TouchableOpacity>
       </View>
@@ -671,11 +789,13 @@ function FeaturedWaterCard({ count, goal, onManage, onPress }: FeaturedWaterCard
 
 interface CompactGlanceCardProps {
   item: GlanceItem;
+  width?: number;
 }
 
-function CompactGlanceCard({ item }: CompactGlanceCardProps) {
-  const { palette } = useTheme();
+function CompactGlanceCard({ item, width }: CompactGlanceCardProps) {
+  const { palette, colorScheme } = useTheme();
   const styles = useStyles();
+  const isDark = colorScheme === 'dark';
 
   const handlePress = () => {
     if (item.onPress) {
@@ -690,7 +810,11 @@ function CompactGlanceCard({ item }: CompactGlanceCardProps) {
     <TouchableOpacity
       style={[
         styles.compactGlanceCard,
-        { borderColor: item.color, backgroundColor: palette.surface },
+        {
+          borderColor: isDark ? `${item.color}99` : item.color,
+          backgroundColor: isDark ? palette.surface : `${item.color}0A`,
+        },
+        width ? { width } : null,
       ]}
       onPress={handlePress}
       activeOpacity={item.onPress ? 0.75 : 1}
@@ -699,29 +823,28 @@ function CompactGlanceCard({ item }: CompactGlanceCardProps) {
       accessibilityLabel={`${item.label}: ${item.value}`}
     >
       <View style={styles.compactCardTop}>
-        <View style={styles.compactTextCol}>
-          <Text style={styles.compactValue} numberOfLines={1}>
-            {item.value}
-          </Text>
-          <Text style={styles.compactLabel} numberOfLines={1}>
-            {item.label}
-          </Text>
-        </View>
-
-        <View style={[styles.compactBadgeBox, { backgroundColor: `${item.color}16` }]}>
+        <Text style={styles.compactValue} numberOfLines={1}>
+          {item.value}
+        </Text>
+        <View style={[styles.compactBadgeBox, { backgroundColor: `${item.color}1C` }]}>
           {IconComp ? (
-            <IconComp size={16} color={item.color} strokeWidth={2.2} />
+            <IconComp size={15} color={item.color} strokeWidth={2.3} />
           ) : (
             <Text style={styles.compactEmoji}>{item.emoji}</Text>
           )}
         </View>
       </View>
 
-      {item.subtitle ? (
-        <Text style={styles.compactSubtitle} numberOfLines={1}>
-          {item.subtitle}
+      <View style={styles.compactCardBottom}>
+        <Text style={styles.compactLabel} numberOfLines={1}>
+          {item.label}
         </Text>
-      ) : null}
+        {item.subtitle ? (
+          <Text style={styles.compactSubtitle} numberOfLines={1}>
+            {item.subtitle}
+          </Text>
+        ) : null}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -965,6 +1088,47 @@ const useStyles = createThemedStyles(palette => ({
     flexWrap: 'wrap',
     gap: 10,
   },
+  quickActionWrapper: {
+    alignItems: 'center',
+  },
+  addQuickActionButton: {
+    width: '100%',
+    aspectRatio: 0.92,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: palette.border,
+    backgroundColor: palette.surfaceAlt === '#F5F0EB' ? '#FAF6F1' : palette.surface,
+  },
+  addQuickActionWell: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${palette.primary}12`,
+    marginBottom: 5,
+  },
+  addQuickActionLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: palette.text,
+    fontSize: 12,
+    lineHeight: 15,
+    textAlign: 'center',
+  },
+  addQuickActionSub: {
+    ...typography.caption,
+    fontSize: 10,
+    fontWeight: '500',
+    color: palette.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -974,10 +1138,10 @@ const useStyles = createThemedStyles(palette => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    backgroundColor: palette.surface,
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: palette.border,
   },
@@ -985,19 +1149,24 @@ const useStyles = createThemedStyles(palette => ({
     ...typography.caption,
     fontWeight: '600',
     color: palette.textSecondary,
-    fontSize: 11,
+    fontSize: 11.5,
   },
   seeAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    paddingVertical: 2,
-    paddingHorizontal: 4,
+    backgroundColor: `${palette.primary}12`,
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: `${palette.primary}25`,
   },
   seeAllText: {
     ...typography.caption,
-    fontWeight: '600',
+    fontWeight: '700',
     color: palette.primary,
+    fontSize: 11.5,
   },
   emptyGlanceBox: {
     width: '100%',
@@ -1025,18 +1194,18 @@ const useStyles = createThemedStyles(palette => ({
     marginTop: 4,
   },
   featuredWaterCard: {
-    width: 172,
-    height: 182,
+    width: 154,
+    height: 176,
     backgroundColor: palette.surface,
-    borderRadius: 22,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: '#38BDF8',
-    padding: 12,
+    padding: 11,
     justifyContent: 'space-between',
-    shadowColor: '#000',
+    shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 2,
   },
   waterCardTopRow: {
@@ -1045,8 +1214,8 @@ const useStyles = createThemedStyles(palette => ({
     justifyContent: 'space-between',
   },
   waterRingWrapper: {
-    width: 84,
-    height: 84,
+    width: 80,
+    height: 80,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -1057,120 +1226,200 @@ const useStyles = createThemedStyles(palette => ({
     justifyContent: 'center',
   },
   waterRingCount: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
+    letterSpacing: -0.5,
     color: palette.text,
   },
   waterRingSubLabel: {
-    fontSize: 11.5,
-    fontWeight: '500',
+    fontSize: 10.5,
+    fontWeight: '600',
+    letterSpacing: 0.3,
     color: palette.textSecondary,
-    marginTop: -1,
+    marginTop: 0.5,
   },
   waterBadgeBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: palette.surfaceAlt === '#F5F0EB' ? '#E0F2FE' : '#0E749025',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: palette.surfaceAlt === '#F5F0EB' ? '#E0F2FE' : '#0E749022',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  waterPlusBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: palette.surface,
   },
   waterCardBottomRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 2,
   },
   waterMetaCol: {
     flex: 1,
     justifyContent: 'center',
   },
   waterMetaTitle: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: palette.text,
+  },
+  waterGoalPill: {
+    marginTop: 2,
+    alignSelf: 'flex-start',
+  },
+  waterGoalPillActive: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
   },
   waterMetaPercent: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: palette.textDisabled,
-    marginTop: 1,
+    fontWeight: '500',
+  },
+  waterMetaPercentActive: {
+    color: '#0284C7',
+    fontWeight: '700',
   },
   waterManageBtn: {
-    backgroundColor: palette.surfaceAlt === '#F5F0EB' ? '#F5EBE6' : '#2D2723',
-    paddingHorizontal: 11,
-    paddingVertical: 5.5,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.surfaceAlt,
+    borderColor: palette.border,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4.5,
+    borderRadius: 10,
     justifyContent: 'center',
   },
   waterManageBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: palette.surfaceAlt === '#F5F0EB' ? '#785345' : '#F5D0C5',
+    color: palette.textSecondary,
   },
   glanceSliderContainer: {
-    flex: 1,
+    width: '100%',
+    marginTop: 4,
   },
   glanceSliderScroll: {
     flexDirection: 'row',
+    gap: 12,
+    paddingRight: 16,
+  },
+  glanceSlide: {
+    flexDirection: 'row',
     gap: 10,
-    paddingRight: 6,
+    alignItems: 'center',
   },
   glanceColumn: {
     flexDirection: 'column',
     gap: 10,
-    width: 144,
   },
   compactGlanceCard: {
-    width: 144,
-    height: 86,
+    width: 154,
+    height: 83,
     borderRadius: 18,
-    borderWidth: 2,
-    padding: 10,
+    borderWidth: 1.5,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 1.5,
+  },
+  addMetricCard: {
+    borderStyle: 'dashed',
+    borderColor: palette.border,
+    backgroundColor: palette.surfaceAlt === '#F5F0EB' ? '#FAF6F1' : palette.surface,
+    borderWidth: 1.5,
+  },
+  addMetricTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  addMetricIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: `${palette.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   compactCardTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 4,
-  },
-  compactTextCol: {
-    flex: 1,
-    marginRight: 4,
   },
   compactValue: {
     ...typography.body,
-    fontSize: 14.5,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
     color: palette.text,
+    flex: 1,
+  },
+  compactBadgeBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactEmoji: {
+    fontSize: 15,
+  },
+  compactCardBottom: {
+    marginTop: 2,
   },
   compactLabel: {
     ...typography.caption,
     fontSize: 11.5,
     color: palette.textSecondary,
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  compactBadgeBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compactEmoji: {
-    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   compactSubtitle: {
     ...typography.caption,
-    fontSize: 10.5,
+    fontSize: 10,
     color: palette.textDisabled,
-    fontWeight: '400',
+    fontWeight: '500',
+    marginTop: 0.5,
+  },
+  glancePaginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 8,
+  },
+  glanceDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: palette.border,
+  },
+  glanceDotActive: {
+    width: 14,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: palette.primary,
   },
 }));

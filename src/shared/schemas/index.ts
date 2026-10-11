@@ -10,6 +10,7 @@ export const DataTypeEnum = z.enum([
 export const DisplayAsEnum = z.enum([
   'slider', 'stepper', 'chips', 'dropdown', 'text',
   'picker', 'color-swatch', 'image-grid', 'toggle', 'camera', 'body-map',
+  'joint-map-3d', 'chest-map', 'body-map-3d',
 ]);
 
 export const EnumValueSchema = z.object({
@@ -157,9 +158,20 @@ export const AnswerSchema = z.object({
   otherText: z.string().max(500).optional(),
 });
 
+export const LogLocationSchema = z.object({
+  latitude: z.number(),
+  longitude: z.number(),
+  accuracy: z.number().optional(),
+  name: z.string().optional(),
+  city: z.string().optional(),
+  region: z.string().optional(),
+  country: z.string().optional(),
+  formattedAddress: z.string().optional(),
+});
+
 export const CreateLogEntrySchema = z.object({
   clientId: z.string().uuid(),
-  source: z.enum(['quick_action', 'questionnaire', 'check_in']),
+  source: z.enum(['quick_action', 'questionnaire', 'check_in', 'quick_log']),
   daySessionId: z.string().optional(),
   categoryId: z.string().optional(),
   questionId: z.string().optional(),
@@ -169,6 +181,7 @@ export const CreateLogEntrySchema = z.object({
   timezone: z.string(),
   answers: z.array(AnswerSchema).default([]),
   mediaIds: z.array(z.string()).default([]),
+  location: LogLocationSchema.optional(),
   note: z.string().max(2000).optional(),
 });
 

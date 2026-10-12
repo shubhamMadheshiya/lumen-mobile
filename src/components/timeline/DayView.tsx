@@ -6,17 +6,19 @@
  */
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, ActivityIndicator, TouchableOpacity,
+  View, Text, ActivityIndicator, TouchableOpacity, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Plus, ChevronDown, ChevronUp, CalendarClock, Sparkles } from 'lucide-react-native';
+import { Plus, ChevronDown, ChevronUp, CalendarClock, Sparkles, Clock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import { ILogEntry, ICategory, IOption, IQuestion, IQuickAction } from '@lumen/shared';
 import { TimelineItem } from './TimelineItem';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 import { PressableScale } from '../common/PressableScale';
-import { toLocalDateString } from '../../hooks/useTimelineSummary';
+import { getTrackingDayDateString } from '../../utils/dayBoundary';
+import { useQuickLogStore } from '../../store/quickLogStore';
 
 interface Props {
   date: string; // 'YYYY-MM-DD'
@@ -28,6 +30,7 @@ interface Props {
   loading: boolean;
   onEditEntry?: (id: string) => void;
   onDeleteEntry?: (id: string) => void;
+  boundaryHour?: number;
 }
 
 interface HourBucket {
@@ -53,12 +56,38 @@ export function DayView({
   loading,
   onEditEntry,
   onDeleteEntry,
+  boundaryHour = 4,
 }: Props) {
   const { palette } = useTheme();
   const styles = useStyles();
 
   // Bulk expand/collapse state: defaults to false (collapsed by default)
   const [allExpanded, setAllExpanded] = useState<boolean | null>(false);
+  const { tap } = useQuickLogStore();
+  const queryClient = useQueryClient();
+
+  const handleQuickActionTap = async (qa: IQuickAction) => {
+    const parts = (date || '').split('-');
+    let targetOccurredAt: string;
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const now = new Date();
+      targetOccurredAt = new Date(y, m, d, now.getHours(), now.getMinutes(), 0).toISOString();
+    } else {
+      targetOccurredAt = new Date().toISOString();
+    }
+
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await tap(qa._id, targetOccurredAt);
+      queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+    } catch {
+      Alert.alert('Error', `Could not log ${qa.label}`);
+    }
+  };
 
   const toggleAllExpanded = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -73,27 +102,34 @@ export function DayView({
       map[h].push(e);
     });
 
-    return Object.keys(map)
-      .map(Number)
-      .sort((a, b) => b - a)
-      .map(hour => ({
-        hour,
-        label: toHourLabel(hour),
-        entries: map[hour].sort(
-          (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
-        ),
-      }));
+    const hourKeys = Object.keys(map).map(Number);
+    // Sort reverse-chronologically by latest entry timestamp in each bucket so that
+    // late-night entries (e.g. 1 AM, 2 AM before boundary) sit at the top of the day,
+    // preceding midnight and evening entries.
+    hourKeys.sort((a, b) => {
+      const maxA = Math.max(...map[a].map(e => new Date(e.occurredAt).getTime()));
+      const maxB = Math.max(...map[b].map(e => new Date(e.occurredAt).getTime()));
+      return maxB - maxA;
+    });
+
+    return hourKeys.map(hour => ({
+      hour,
+      label: toHourLabel(hour),
+      entries: map[hour].sort(
+        (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
+      ),
+    }));
   }, [entries]);
 
   const formattedDate = useMemo(() => {
-    const today = toLocalDateString(new Date());
-    if (date === today) return 'Today';
+    const curToday = getTrackingDayDateString(new Date(), boundaryHour);
+    if (date === curToday) return 'Today';
     const parts = (date || '').split('-');
     const d = parts.length === 3
       ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
       : new Date();
     return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-  }, [date]);
+  }, [date, boundaryHour]);
 
   if (loading) {
     return (
@@ -123,7 +159,12 @@ export function DayView({
           </Text>
           <PressableScale
             style={styles.emptyAddBtn}
-            onPress={() => router.push('/log' as any)}
+            onPress={() =>
+              router.push({
+                pathname: '/log',
+                params: { date },
+              } as any)
+            }
             haptic="medium"
             activeScale={0.95}
             accessibilityRole="button"
@@ -145,12 +186,7 @@ export function DayView({
                   <PressableScale
                     key={qa._id}
                     style={styles.emptyQuickChip}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/log',
-                        params: { quickActionId: qa._id },
-                      } as any)
-                    }
+                    onPress={() => handleQuickActionTap(qa)}
                     haptic="light"
                     activeScale={0.93}
                   >
@@ -176,6 +212,14 @@ export function DayView({
           <Text style={styles.countBadge}>
             {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
           </Text>
+          {boundaryHour !== undefined && boundaryHour !== 0 && (
+            <View style={styles.boundaryBadge}>
+              <Clock size={11} color={palette.primary} strokeWidth={2.4} />
+              <Text style={styles.boundaryBadgeText}>
+                {boundaryHour % 12 || 12} {boundaryHour < 12 ? 'AM' : 'PM'} Reset
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Global Expand all / Collapse all toggle button */}
@@ -225,6 +269,8 @@ export function DayView({
                   category={cat}
                   question={q}
                   options={opts}
+                  allQuestions={questions}
+                  allOptions={options}
                   quickAction={qa}
                   onDelete={onDeleteEntry}
                   onEdit={onEditEntry}
@@ -235,6 +281,26 @@ export function DayView({
           </View>
         </View>
       ))}
+
+      {/* Footer action to add another log for this day */}
+      <View style={styles.dayFooterAddWrap}>
+        <PressableScale
+          style={styles.dayFooterAddBtn}
+          onPress={() =>
+            router.push({
+              pathname: '/log',
+              params: { date },
+            } as any)
+          }
+          haptic="medium"
+          activeScale={0.96}
+          accessibilityRole="button"
+          accessibilityLabel={`Log an entry for ${formattedDate}`}
+        >
+          <Plus size={16} color={palette.primary} strokeWidth={2.5} />
+          <Text style={styles.dayFooterAddText}>Log an entry for this day</Text>
+        </PressableScale>
+      </View>
 
       <View style={{ height: 32 }} />
     </View>
@@ -418,6 +484,23 @@ const useStyles = createThemedStyles(palette => ({
     borderRadius: 12,
     fontWeight: '700',
   },
+  boundaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.primary + '14',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.primary + '2E',
+  },
+  boundaryBadgeText: {
+    ...typography.caption,
+    color: palette.primary,
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
   expandAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -447,4 +530,25 @@ const useStyles = createThemedStyles(palette => ({
   },
   line: { flex: 1, height: 1, backgroundColor: palette.border },
   entriesWrap: { paddingLeft: 4 },
+  dayFooterAddWrap: {
+    marginTop: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayFooterAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    backgroundColor: palette.primary + '12',
+    borderWidth: 1.5,
+    borderColor: palette.primary + '35',
+  },
+  dayFooterAddText: {
+    ...typography.bodyBold,
+    fontSize: 14,
+    color: palette.primary,
+  },
 }));

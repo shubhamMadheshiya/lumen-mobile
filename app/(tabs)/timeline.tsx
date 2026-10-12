@@ -4,7 +4,7 @@
  * - Full edit flow navigation to /log/edit/[id]
  * - Visual anatomical body map & photo inspection
  */
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,14 +16,16 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Search, X, Camera, RotateCcw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useConfigStore } from '../../src/store/configStore';
+import { useAuthStore } from '../../src/store/authStore';
 import { CalendarHeatMap } from '../../src/components/timeline/CalendarHeatMap';
 import { DayView } from '../../src/components/timeline/DayView';
 import { useTimelineSummary, useDayEntries, toLocalDateString } from '../../src/hooks/useTimelineSummary';
+import { getTrackingDayDateString } from '../../src/utils/dayBoundary';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { api } from '../../src/api/client';
@@ -36,12 +38,30 @@ export default function TimelineScreen() {
   const styles = useStyles();
   const queryClient = useQueryClient();
 
-  const [today, setToday] = useState(() => toLocalDateString());
-  const [selectedDate, setSelectedDate] = useState(() => toLocalDateString());
-  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const { user } = useAuthStore();
+  const boundaryHour = user?.preferences?.dayBoundaryHour ?? 4;
+  const { date: routeDate } = useLocalSearchParams<{ date?: string }>();
+
+  const [today, setToday] = useState(() => getTrackingDayDateString(new Date(), boundaryHour));
+  const [selectedDate, setSelectedDate] = useState(() => routeDate || getTrackingDayDateString(new Date(), boundaryHour));
+  const [calYear, setCalYear] = useState(() => {
+    const dStr = routeDate || getTrackingDayDateString(new Date(), boundaryHour);
+    const p = dStr.split('-');
+    return p.length === 3 ? parseInt(p[0], 10) : new Date().getFullYear();
+  });
+  const [calMonth, setCalMonth] = useState(() => {
+    const dStr = routeDate || getTrackingDayDateString(new Date(), boundaryHour);
+    const p = dStr.split('-');
+    return p.length === 3 ? parseInt(p[1], 10) - 1 : new Date().getMonth();
+  });
   const [showCalendar, setShowCalendar] = useState(true);
   const [calViewMode, setCalViewMode] = useState<'week' | 'month'>('week');
+
+  useEffect(() => {
+    if (routeDate && routeDate !== selectedDate) {
+      jumpToDate(routeDate);
+    }
+  }, [routeDate]);
 
   // Multi-dimensional filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,25 +69,28 @@ export default function TimelineScreen() {
   const [filterCatId, setFilterCatId] = useState<string | null>(null);
 
   const { config } = useConfigStore();
-  const { data: summary = [], refetch: refetchSummary } = useTimelineSummary(calYear, calMonth);
+  const { data: summary = [], refetch: refetchSummary } = useTimelineSummary(calYear, calMonth, boundaryHour);
   const {
     data: entries = [],
     isLoading: entriesLoading,
     refetch: refetchEntries,
-  } = useDayEntries(selectedDate);
+  } = useDayEntries(selectedDate, boundaryHour);
 
   // Automatically update timeline data from API whenever user switches to the Timeline tab
   useFocusEffect(
     useCallback(() => {
       const now = new Date();
-      const curToday = toLocalDateString(now);
+      const curToday = getTrackingDayDateString(now, boundaryHour);
 
       setToday(prevToday => {
         if (prevToday !== curToday) {
           // If the day rolled over and user was looking at previous today, advance to new today
           setSelectedDate(prevSel => (prevSel === prevToday ? curToday : prevSel));
-          setCalYear(now.getFullYear());
-          setCalMonth(now.getMonth());
+          const parts = curToday.split('-');
+          if (parts.length === 3) {
+            setCalYear(parseInt(parts[0], 10));
+            setCalMonth(parseInt(parts[1], 10) - 1);
+          }
         }
         return curToday;
       });
@@ -82,7 +105,7 @@ export default function TimelineScreen() {
 
       // Refresh config in background to pick up newly added questions/categories/quick-actions
       useConfigStore.getState().fetchConfig().catch(() => {});
-    }, [queryClient, refetchSummary, refetchEntries])
+    }, [boundaryHour, queryClient, refetchSummary, refetchEntries])
   );
 
   const [refreshing, setRefreshing] = useState(false);
@@ -339,6 +362,7 @@ export default function TimelineScreen() {
               onToggleViewMode={setCalViewMode}
               onPrevWeek={prevWeek}
               onNextWeek={nextWeek}
+              todayDate={today}
             />
           </View>
         )}
@@ -358,7 +382,17 @@ export default function TimelineScreen() {
           <View style={styles.dayNavCenter}>
             <Text style={styles.dayLabel}>
               {isToday
-                ? `Today • ${new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`
+                ? `Today • ${(() => {
+                    const parts = (today || '').split('-');
+                    const d = parts.length === 3
+                      ? new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0)
+                      : new Date();
+                    return d.toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    });
+                  })()}`
                 : (() => {
                     const parts = (selectedDate || '').split('-');
                     const d = parts.length === 3
@@ -549,6 +583,7 @@ export default function TimelineScreen() {
             loading={entriesLoading}
             onEditEntry={handleEditEntry}
             onDeleteEntry={handleDeleteEntry}
+            boundaryHour={boundaryHour}
           />
         </View>
       </ScrollView>

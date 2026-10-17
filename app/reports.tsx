@@ -8,7 +8,7 @@ import {
   ActivityIndicator, Alert, Platform,
 } from 'react-native';
 import { Stack } from 'expo-router';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import AppDateTimePicker from '../src/components/common/AppDateTimePicker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useConfigStore } from '../src/store/configStore';
@@ -46,30 +46,53 @@ export default function ReportsScreen() {
     });
   };
 
-  const onFromChange = (e: DateTimePickerEvent, d?: Date) => {
-    if (Platform.OS === 'android') setShowFromPicker(false);
-    if (e.type === 'set' && d) { setFromDate(d); if (d > toDate) setToDate(d); }
-    if (Platform.OS === 'ios' && e.type === 'dismissed') setShowFromPicker(false);
+  const onFromChange = (d: Date) => {
+    setFromDate(d);
+    if (d > toDate) setToDate(d);
   };
-  const onToChange = (e: DateTimePickerEvent, d?: Date) => {
-    if (Platform.OS === 'android') setShowToPicker(false);
-    if (e.type === 'set' && d) setToDate(d);
-    if (Platform.OS === 'ios' && e.type === 'dismissed') setShowToPicker(false);
+  const onToChange = (d: Date) => {
+    setToDate(d);
   };
 
   const exportReport = async () => {
     setExporting(true);
     try {
+      const fromStart = new Date(fromDate);
+      fromStart.setHours(0, 0, 0, 0);
+      const toEnd = new Date(toDate);
+      toEnd.setHours(23, 59, 59, 999);
+
       const catIds = selectedCats.size > 0 ? [...selectedCats] : undefined;
       const { base64 } = await apiDownload('/reports', {
-        from: isoDate(fromDate),
-        to: isoDate(toDate),
+        from: fromStart.toISOString(),
+        to: toEnd.toISOString(),
         format,
         categoryIds: catIds,
       });
 
       const mimeType = format === 'pdf' ? 'application/pdf' : 'text/csv';
       const filename = `lumen-report-${isoDate(fromDate)}-to-${isoDate(toDate)}.${format}`;
+
+      if (Platform.OS === 'web') {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        Alert.alert('Report exported', `Downloaded ${filename}`);
+        return;
+      }
+
       const cacheDir = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || '';
       const path = `${cacheDir}${filename}`;
 
@@ -83,8 +106,10 @@ export default function ReportsScreen() {
       } else {
         Alert.alert('Exported', `Saved to: ${path}`);
       }
-    } catch {
-      Alert.alert('Export failed', 'Could not generate the report. Please try again.');
+    } catch (err: unknown) {
+      console.error('[reports] Export failed:', err);
+      const msg = err instanceof Error ? err.message : 'Could not generate the report. Please try again.';
+      Alert.alert('Export failed', msg);
     } finally { setExporting(false); }
   };
 
@@ -111,25 +136,23 @@ export default function ReportsScreen() {
         </View>
         <Text style={styles.dateMeta}>{dayCount} day{dayCount !== 1 ? 's' : ''} selected</Text>
 
-        {showFromPicker && (
-          <DateTimePicker
-            value={fromDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            onChange={onFromChange}
-            maximumDate={toDate}
-          />
-        )}
-        {showToPicker && (
-          <DateTimePicker
-            value={toDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            onChange={onToChange}
-            minimumDate={fromDate}
-            maximumDate={new Date()}
-          />
-        )}
+        <AppDateTimePicker
+          visible={showFromPicker}
+          onClose={() => setShowFromPicker(false)}
+          value={fromDate}
+          mode="date"
+          onChange={onFromChange}
+          maximumDate={toDate}
+        />
+        <AppDateTimePicker
+          visible={showToPicker}
+          onClose={() => setShowToPicker(false)}
+          value={toDate}
+          mode="date"
+          onChange={onToChange}
+          minimumDate={fromDate}
+          maximumDate={new Date()}
+        />
 
         {/* Format */}
         <Text style={styles.sectionLabel}>Format</Text>

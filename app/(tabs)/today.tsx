@@ -39,6 +39,7 @@ import {
   Pin,
 } from 'lucide-react-native';
 
+import { IQuickAction } from '@lumen/shared';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { typography } from '../../src/theme/typography';
 import { useAuthStore } from '../../src/store/authStore';
@@ -60,6 +61,8 @@ import { WaterQuantityModal } from '../../src/components/WaterQuantityModal';
 import { WalkingBannerCard } from '../../src/components/walking/WalkingBannerCard';
 import { WeatherReportModal } from '../../src/components/weather/WeatherReportModal';
 import { AccountSwitcherModal } from '../../src/components/auth/AccountSwitcherModal';
+import { LinkedQuickTapModal } from '../../src/components/home/LinkedQuickTapModal';
+import { getTrackingDayDateString } from '../../src/utils/dayBoundary';
 
 export default function TodayScreen() {
   const { palette } = useTheme();
@@ -67,6 +70,7 @@ export default function TodayScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const { user, fetchProfile, savedAccounts } = useAuthStore();
   const [accountSwitcherVisible, setAccountSwitcherVisible] = useState(false);
+  const [selectedLinkedAction, setSelectedLinkedAction] = useState<IQuickAction | null>(null);
   const { config, fetchConfig } = useConfigStore();
   const { todaySession, fetchTodaySession } = useDaySessionStore();
   const { todayTaps, fetchTodayTaps, tap } = useQuickLogStore();
@@ -109,13 +113,38 @@ export default function TodayScreen() {
     return now.getHours() * 60 + now.getMinutes();
   });
 
+  const boundaryHour = user?.preferences?.dayBoundaryHour ?? 4;
+  const currentTrackingDayRef = useRef(getTrackingDayDateString(new Date(), boundaryHour));
+
+  const loadData = useCallback(async () => {
+    await Promise.allSettled([
+      fetchProfile(),
+      fetchConfig(),
+      fetchTodaySession(),
+      fetchTodaySummary(),
+      fetchReminders(),
+      fetchTodayTaps(boundaryHour),
+      fetchGlanceConfig(),
+      loadSleepState(),
+      initWeather(),
+    ]);
+  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps, boundaryHour, fetchGlanceConfig, loadSleepState, initWeather]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
       setCurrentTimeMinutes(now.getHours() * 60 + now.getMinutes());
+
+      // Auto-prune stale taps and check if day reset boundary has passed
+      useQuickLogStore.getState().pruneStaleTaps(boundaryHour);
+      const trackingDayNow = getTrackingDayDateString(now, boundaryHour);
+      if (trackingDayNow !== currentTrackingDayRef.current) {
+        currentTrackingDayRef.current = trackingDayNow;
+        loadData();
+      }
     }, 30000); // 30-second live check
     return () => clearInterval(interval);
-  }, []);
+  }, [boundaryHour, loadData]);
 
   // Daytime active mode: Awake (not sleeping) AND before 9:30 PM (21:30 = 1290 minutes)
   const isDaytimeMode = useMemo(() => {
@@ -126,20 +155,6 @@ export default function TodayScreen() {
     if (currentTimeMinutes < 240 && !lastSleepRecord?.wakeTime) return false;
     return true;
   }, [isSleeping, currentTimeMinutes, lastSleepRecord]);
-
-  const loadData = useCallback(async () => {
-    await Promise.allSettled([
-      fetchProfile(),
-      fetchConfig(),
-      fetchTodaySession(),
-      fetchTodaySummary(),
-      fetchReminders(),
-      fetchTodayTaps(),
-      fetchGlanceConfig(),
-      loadSleepState(),
-      initWeather(),
-    ]);
-  }, [fetchProfile, fetchConfig, fetchTodaySession, fetchTodaySummary, fetchReminders, fetchTodayTaps, fetchGlanceConfig, loadSleepState, initWeather]);
 
   useEffect(() => {
     loadData();
@@ -491,6 +506,8 @@ export default function TodayScreen() {
                           setSelectedWaterActionId(action._id);
                           setWaterModalVisible(true);
                         }
+                      : (action.linkedOptionId && action.linkedQuestionId)
+                      ? () => setSelectedLinkedAction(action)
                       : undefined
                   }
                 />
@@ -860,7 +877,18 @@ export default function TodayScreen() {
         onClose={() => setWaterModalVisible(false)}
         quickActionId={selectedWaterActionId || waterAction?._id}
         onLogged={() => {
-          fetchTodayTaps();
+          fetchTodayTaps(boundaryHour);
+        }}
+      />
+
+      {/* Linked Quick Tap In-Place Modal */}
+      <LinkedQuickTapModal
+        visible={!!selectedLinkedAction}
+        action={selectedLinkedAction}
+        onClose={() => setSelectedLinkedAction(null)}
+        onSuccess={() => {
+          setSelectedLinkedAction(null);
+          fetchTodayTaps(boundaryHour);
         }}
       />
 
@@ -878,7 +906,7 @@ export default function TodayScreen() {
           fetchProfile().catch(() => {});
           fetchConfig().catch(() => {});
           fetchTodaySession().catch(() => {});
-          fetchTodayTaps().catch(() => {});
+          fetchTodayTaps(boundaryHour).catch(() => {});
           fetchTodaySummary().catch(() => {});
           fetchReminders().catch(() => {});
         }}

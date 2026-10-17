@@ -160,7 +160,17 @@ export async function apiRequest<T = unknown>(
   }
 
   if (!resp.ok) {
-    throw new ApiError(resp.status, json.message ?? 'Request failed', json.errors);
+    let errorDetails = '';
+    if (Array.isArray(json.errors) && json.errors.length > 0) {
+      errorDetails = ': ' + json.errors
+        .map((e: any) => `${e.field ? e.field + ': ' : ''}${e.message || JSON.stringify(e)}`)
+        .join(', ');
+    } else if (typeof json.errors === 'string') {
+      errorDetails = `: ${json.errors}`;
+    }
+    const fullMessage = (json.message ?? 'Request failed') + errorDetails;
+    console.error(`[API Error ${resp.status}] ${path}:`, fullMessage, json.errors);
+    throw new ApiError(resp.status, fullMessage, json.errors);
   }
 
   return (json.data !== undefined ? json.data : (json as unknown as T));
@@ -208,7 +218,18 @@ export async function apiDownload(
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => 'Request failed');
-    throw new ApiError(resp.status, text);
+    let msg = text;
+    try {
+      const json = JSON.parse(text);
+      if (json.message) {
+        msg = json.message;
+        if (Array.isArray(json.errors) && json.errors.length > 0) {
+          msg += ': ' + json.errors.map((e: any) => `${e.field ? e.field + ': ' : ''}${e.message || JSON.stringify(e)}`).join(', ');
+        }
+      }
+    } catch {}
+    console.error(`[apiDownload Error ${resp.status}] ${path}:`, msg);
+    throw new ApiError(resp.status, msg);
   }
 
   const contentType = resp.headers.get('Content-Type') ?? 'application/octet-stream';

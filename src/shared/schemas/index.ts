@@ -104,8 +104,8 @@ export const CreateQuickActionSchema = z.object({
   defaultValue: z.number().optional(),
   unit: z.string().optional(),
   dailyGoal: z.number().positive().optional(),
-  linkedQuestionId: z.string().optional(),
-  linkedOptionId: z.string().optional(),
+  linkedQuestionId: z.string().nullable().optional(),
+  linkedOptionId: z.string().nullable().optional(),
   order: z.number().int().min(0).optional(),
   isVisible: z.boolean().default(true),
 });
@@ -146,43 +146,43 @@ export const FieldValueSchema = z.object({
   fieldKey: z.string().min(1),
   dataType: DataTypeEnum,
   value: z.unknown(),
-  unit: z.string().optional(),
-  canonicalValue: z.number().optional(),
+  unit: z.string().optional().nullable(),
+  canonicalValue: z.number().optional().nullable(),
 });
 
 export const AnswerSchema = z.object({
   optionId: z.string(),
-  optionLabelSnapshot: z.string(),
+  optionLabelSnapshot: z.string().optional().nullable(),
   values: z.array(FieldValueSchema).default([]),
-  comment: z.string().max(1000).optional(),
-  otherText: z.string().max(500).optional(),
+  comment: z.string().max(1000).optional().nullable(),
+  otherText: z.string().max(500).optional().nullable(),
 });
 
 export const LogLocationSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
-  accuracy: z.number().optional(),
-  name: z.string().optional(),
-  city: z.string().optional(),
-  region: z.string().optional(),
-  country: z.string().optional(),
-  formattedAddress: z.string().optional(),
+  accuracy: z.number().optional().nullable(),
+  name: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
+  formattedAddress: z.string().optional().nullable(),
 });
 
 export const CreateLogEntrySchema = z.object({
   clientId: z.string().uuid(),
   source: z.enum(['quick_action', 'questionnaire', 'check_in', 'quick_log']),
-  daySessionId: z.string().optional(),
-  categoryId: z.string().optional(),
-  questionId: z.string().optional(),
-  questionVersion: z.number().int().optional(),
-  quickActionId: z.string().optional(),
+  daySessionId: z.string().optional().nullable(),
+  categoryId: z.string().optional().nullable(),
+  questionId: z.string().optional().nullable(),
+  questionVersion: z.number().int().optional().nullable(),
+  quickActionId: z.string().optional().nullable(),
   occurredAt: z.string().datetime(),
   timezone: z.string(),
   answers: z.array(AnswerSchema).default([]),
   mediaIds: z.array(z.string()).default([]),
-  location: LogLocationSchema.optional(),
-  note: z.string().max(2000).optional(),
+  location: LogLocationSchema.optional().nullable(),
+  note: z.string().max(2000).optional().nullable(),
 });
 
 export const BatchLogEntrySchema = z.object({
@@ -265,8 +265,8 @@ export const ApplyTemplatesSchema = z.object({
 // ────────── Reports ──────────
 
 export const ReportRequestSchema = z.object({
-  from: z.string().datetime(),
-  to: z.string().datetime(),
+  from: z.string().min(1),
+  to: z.string().min(1),
   format: z.enum(['pdf', 'csv', 'json']).default('pdf'),
   categoryIds: z.array(z.string()).optional(),
   includeImages: z.boolean().default(false),
@@ -277,3 +277,57 @@ export const ReportRequestSchema = z.object({
 export const ReorderSchema = z.object({
   ids: z.array(z.string()).min(1),
 });
+
+// ────────── Community Templates ──────────
+
+export const CreateCommunityTemplateSchema = z.object({
+  title: z.string().min(3).max(100),
+  description: z.string().min(5).max(1000),
+  conditionTags: z.array(z.string().min(1).max(40)).min(1).max(10),
+  icon: z.string().min(1).max(20).default('📋'),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#4A90E2'),
+  isAnonymous: z.boolean().default(true),
+  categories: z.array(
+    z.object({
+      name: z.string().min(1).max(80),
+      icon: z.string().min(1).max(20).default('📝'),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#4A90E2'),
+      role: z.enum(['trigger_candidate', 'symptom', 'context']),
+      questions: z.array(
+        z.object({
+          title: z.string().min(1).max(150),
+          helpText: z.string().max(300).optional(),
+          icon: z.string().max(20).optional(),
+          selectionType: z.enum(['single', 'multiple']).default('single'),
+          allowOther: z.boolean().default(false),
+          required: z.boolean().default(false),
+          frequency: z.enum(['anytime', 'once_per_day', 'per_meal', 'morning', 'evening']).default('anytime'),
+          options: z.array(
+            z.object({
+              label: z.string().min(1).max(100),
+              icon: z.string().max(20).optional(),
+              color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+              allowComment: z.boolean().default(false),
+              captureTime: z.enum(['none', 'auto_now', 'user_picks']).default('none'),
+              fields: z.array(z.record(z.any())).optional(),
+            })
+          ).default([]),
+        })
+      ).default([]),
+    })
+  ).min(1),
+  quickActions: z.array(
+    z.object({
+      label: z.string().min(1).max(80),
+      icon: z.string().min(1).max(20),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      mode: z.enum(['counter', 'timer', 'toggle']),
+      defaultValue: z.number().optional(),
+      unit: z.string().optional(),
+      dailyGoal: z.number().optional(),
+    })
+  ).optional().default([]),
+});
+
+export type CreateCommunityTemplateDto = z.infer<typeof CreateCommunityTemplateSchema>;
+

@@ -4,12 +4,13 @@
  * Plain sentence, the counts behind it ("9 of 14 days"), a verbal strength, and an always-visible
  * line that this is not a cause. Words come from insightCopy.ts, which has one test for all of them.
  */
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTheme, createThemedStyles } from '../../theme/ThemeContext';
 import { typography } from '../../theme/typography';
 import type { InsightFinding } from '../../hooks/useInsights';
 import { RateBars } from './RateBars';
+import { useExplain } from '../../hooks/useExplain';
 import {
   headline, notSeenSince, rates, statLine, tierLabel, tierNote, TOGETHER_NOT_CAUSE,
 } from '../../services/insights/insightCopy';
@@ -18,14 +19,29 @@ interface Props {
   finding: InsightFinding;
   /** "Not useful": hide this pattern on this phone. */
   onDismiss?: (finding: InsightFinding) => void;
+  /** "Test it": start a 6-week guided experiment on this exposure and outcome. */
+  onTestIt?: (finding: InsightFinding) => void;
+  /** Disables "Test it" while another experiment is already running. */
+  testItDisabled?: boolean;
+  /** preferences.aiExplanations — off by default; "Explain" only shows when the member turned it on. */
+  aiExplanationsEnabled?: boolean;
 }
 
-export function InsightCard({ finding, onDismiss }: Props) {
+export function InsightCard({ finding, onDismiss, onTestIt, testItDisabled, aiExplanationsEnabled }: Props) {
   const { palette } = useTheme();
   const styles = useStyles();
   const { withRate, otherRate } = rates(finding);
   const faded = finding.noLongerSeen;
   const tone = finding.tier === 'consistent' ? palette.success : palette.warning;
+  const explain = useExplain();
+  const [explanation, setExplanation] = useState<{ text: string; source: 'ai' | 'template' } | null>(null);
+
+  const handleExplain = () => {
+    explain.mutate(
+      { kind: 'finding', exposureKey: finding.exposureKey, outcomeKey: finding.outcomeKey, lagDays: finding.lagDays },
+      { onSuccess: res => setExplanation(res) },
+    );
+  };
 
   return (
     <View
@@ -62,16 +78,49 @@ export function InsightCard({ finding, onDismiss }: Props) {
       </Text>
       <Text style={styles.together} maxFontSizeMultiplier={1.3}>{TOGETHER_NOT_CAUSE}</Text>
 
-      {onDismiss ? (
+      {explanation ? (
+        <View style={styles.explainBox}>
+          <Text style={styles.explainTag} maxFontSizeMultiplier={1.3}>{explanation.source === 'ai' ? 'AI-written' : 'Plain-language summary'}</Text>
+          <Text style={styles.explainText} maxFontSizeMultiplier={1.3}>{explanation.text}</Text>
+        </View>
+      ) : null}
+
+      {(onDismiss || onTestIt || (aiExplanationsEnabled && !faded)) ? (
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.action}
-            onPress={() => onDismiss(finding)}
-            accessibilityRole="button"
-            accessibilityLabel={`Not useful: hide this pattern about ${finding.exposure.optionLabel} and ${finding.outcome.optionLabel}`}
-          >
-            <Text style={styles.actionText} maxFontSizeMultiplier={1.3}>Not useful</Text>
-          </TouchableOpacity>
+          {aiExplanationsEnabled && !faded && !explanation ? (
+            <TouchableOpacity
+              style={styles.action}
+              onPress={handleExplain}
+              disabled={explain.isPending}
+              accessibilityRole="button"
+              accessibilityLabel={`Explain this pattern about ${finding.exposure.optionLabel} and ${finding.outcome.optionLabel} in plain words`}
+            >
+              {explain.isPending
+                ? <ActivityIndicator size="small" color={palette.primaryText} />
+                : <Text style={styles.actionText} maxFontSizeMultiplier={1.3}>Explain</Text>}
+            </TouchableOpacity>
+          ) : null}
+          {onTestIt && !faded ? (
+            <TouchableOpacity
+              style={styles.action}
+              onPress={() => onTestIt(finding)}
+              disabled={testItDisabled}
+              accessibilityRole="button"
+              accessibilityLabel={`Test it: start a 6-week experiment on ${finding.exposure.optionLabel} and ${finding.outcome.optionLabel}`}
+            >
+              <Text style={[styles.actionText, testItDisabled && styles.actionTextDisabled]} maxFontSizeMultiplier={1.3}>Test it</Text>
+            </TouchableOpacity>
+          ) : null}
+          {onDismiss ? (
+            <TouchableOpacity
+              style={styles.action}
+              onPress={() => onDismiss(finding)}
+              accessibilityRole="button"
+              accessibilityLabel={`Not useful: hide this pattern about ${finding.exposure.optionLabel} and ${finding.outcome.optionLabel}`}
+            >
+              <Text style={styles.actionText} maxFontSizeMultiplier={1.3}>Not useful</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -93,7 +142,11 @@ const useStyles = createThemedStyles(palette => ({
   stat: { ...typography.body, color: palette.textSecondary, lineHeight: 22 },
   note: { ...typography.footnote, color: palette.textSecondary, lineHeight: 19 },
   together: { ...typography.footnote, fontWeight: '600', color: palette.text, lineHeight: 19 },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 },
+  explainBox: { backgroundColor: palette.primaryText + '0f', borderRadius: 16, padding: 12, gap: 4 },
+  explainTag: { ...typography.caption, fontWeight: '700', color: palette.primaryText },
+  explainText: { ...typography.body, color: palette.text, lineHeight: 21 },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 4, marginTop: 2 },
   action: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 8 },
   actionText: { ...typography.body, color: palette.primaryText },
+  actionTextDisabled: { color: palette.textDisabled },
 }));

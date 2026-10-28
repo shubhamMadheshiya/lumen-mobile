@@ -33,6 +33,7 @@ import {
   Search,
   X,
   HelpCircle,
+  FileBadge,
 } from 'lucide-react-native';
 import { useTheme, createThemedStyles } from '../../src/theme/ThemeContext';
 import { useConfigStore } from '../../src/store/configStore';
@@ -176,6 +177,16 @@ export default function CustomizeScreen() {
       tile: '#FFB000',
       group: 'Spaces',
       keywords: ['notes', 'docs', 'documents', 'doctor notes', 'journal', 'clinical'],
+    },
+    {
+      id: 'health-records',
+      label: 'Health Records & Rx',
+      sub: 'Blood tests, lab reports & doctor prescriptions',
+      route: '/records',
+      icon: FileBadge,
+      tile: '#0284C7',
+      group: 'Spaces',
+      keywords: ['health records', 'blood test', 'lab report', 'prescription', 'doctor rx', 'imaging', 'blood', 'doctor'],
     },
     {
       id: 'community',
@@ -448,6 +459,7 @@ export default function CustomizeScreen() {
             <InsetGroup title="Spaces">
               <GroupedRow icon={ListChecks} tile={palette.tint} label="To Do" chevron onPress={go('/todo')} />
               <GroupedRow icon={FileText} tile="#FFB000" label="Notes & Docs" chevron onPress={go('/notes')} />
+              <GroupedRow icon={FileBadge} tile="#0284C7" label="Health Records & Rx" sub="Blood tests & doctor prescriptions" chevron onPress={go('/records')} />
               <GroupedRow icon={Users} tile={palette.catMood} label="Community" chevron onPress={go('/community')} />
             </InsetGroup>
 

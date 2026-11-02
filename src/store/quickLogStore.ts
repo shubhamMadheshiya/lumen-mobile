@@ -64,6 +64,7 @@ interface QuickLogState {
   loadTodayTaps: (quickActionId: string, count: number, lastAt: string, boundaryHour?: number) => void;
   fetchTodayTaps: (boundaryHour?: number) => Promise<void>;
   pruneStaleTaps: (boundaryHour?: number) => void;
+  rehydrate: (boundaryHour?: number) => Promise<Record<string, QuickTapEntry>>;
 }
 
 export const useQuickLogStore = create<QuickLogState>((set, get) => ({
@@ -284,14 +285,18 @@ export const useQuickLogStore = create<QuickLogState>((set, get) => ({
       console.warn('[quickLog] fetchTodayTaps failed, using cached state:', err);
     }
   },
+
+  rehydrate: async (boundaryHour?: number) => {
+    return rehydrateTodayTaps(boundaryHour);
+  },
 }));
 
-// Hydrate from AsyncStorage on startup respecting Day Reset Boundary
-AsyncStorage.getItem(STORAGE_KEY).then(cached => {
-  if (cached) {
-    try {
+export async function rehydrateTodayTaps(overrideHour?: number): Promise<Record<string, QuickTapEntry>> {
+  try {
+    const cached = await AsyncStorage.getItem(STORAGE_KEY);
+    if (cached) {
       const parsed = JSON.parse(cached) as Record<string, QuickTapEntry>;
-      const bHour = getActiveBoundaryHour();
+      const bHour = getActiveBoundaryHour(overrideHour);
       const now = new Date();
       const validTaps: Record<string, QuickTapEntry> = {};
       for (const [k, v] of Object.entries(parsed)) {
@@ -300,7 +305,17 @@ AsyncStorage.getItem(STORAGE_KEY).then(cached => {
         }
       }
       useQuickLogStore.setState({ todayTaps: validTaps });
-      triggerWidgetSync();
-    } catch {}
+      return validTaps;
+    }
+  } catch (err) {
+    console.warn('[quickLog] rehydrateTodayTaps error:', err);
+  }
+  return {};
+}
+
+// Hydrate from AsyncStorage on startup respecting Day Reset Boundary
+rehydrateTodayTaps().then((taps) => {
+  if (Object.keys(taps).length > 0) {
+    triggerWidgetSync();
   }
 }).catch(() => {});

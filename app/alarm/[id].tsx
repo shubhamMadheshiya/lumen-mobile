@@ -20,6 +20,11 @@ import { useReminderStore } from '../../src/store/reminderStore';
 import { useQuickLogStore } from '../../src/store/quickLogStore';
 import { snoozeReminder } from '../../src/services/notifications';
 import { startAlarmSound, stopSound, getSoundOption } from '../../src/services/soundService';
+import { isNativeAlarmAvailable } from '../../src/services/alarmScheduler';
+
+// On Android the native alarm already rang (alarm stream, full screen) and the member opened
+// this page from it, so ringing again here — on the media stream — would be a second alarm.
+const RINGS_IN_APP = !isNativeAlarmAvailable();
 import { api } from '../../src/api/client';
 import { palette } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
@@ -105,8 +110,7 @@ export default function AlarmScreen() {
 
   // Continuous alarm sound playback
   useEffect(() => {
-    const soundKey = reminder?.sound || 'default';
-    startAlarmSound(soundKey);
+    if (RINGS_IN_APP) startAlarmSound(reminder?.sound || 'default');
 
     return () => {
       stopSound().catch(() => {});
@@ -115,6 +119,7 @@ export default function AlarmScreen() {
 
   // Continuous alarm vibration pattern (until dismissed or snoozed)
   useEffect(() => {
+    if (!RINGS_IN_APP) return undefined;
     const triggerHaptics = () => {
       if (isDismissedRef.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});

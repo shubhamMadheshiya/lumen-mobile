@@ -44,9 +44,20 @@ function AppBootstrap() {
     if (Platform.OS === 'android') {
       try {
         const { syncLiveWidgetsFromStores } = require('../src/widgets/widgetSync');
+        const { rehydrateTodayTaps } = require('../src/store/quickLogStore');
+        const { rehydrateTasks } = require('../src/store/taskStore');
+
         syncLiveWidgetsFromStores();
-        const sub = AppState.addEventListener('change', (next) => {
+        const sub = AppState.addEventListener('change', async (next) => {
           if (next === 'active') {
+            await Promise.all([
+              rehydrateTodayTaps().catch(() => {}),
+              rehydrateTasks().catch(() => {}),
+            ]);
+            queryClient.invalidateQueries({ queryKey: ['today-logs'] });
+            queryClient.invalidateQueries({ queryKey: ['day-entries'] });
+            queryClient.invalidateQueries({ queryKey: ['timeline-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
             syncLiveWidgetsFromStores();
           }
         });

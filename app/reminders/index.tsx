@@ -24,7 +24,7 @@ import {
   getLastNotificationError,
   getAlarmDeliveryCapabilities,
 } from '../../src/services/notifications';
-import { openExactAlarmSettings, openFullScreenIntentSettings } from '../../src/services/alarmScheduler';
+import { openExactAlarmSettings, openFullScreenIntentSettings, openOverlaySettings, isNativeAlarmAvailable } from '../../src/services/alarmScheduler';
 import { IReminder, ReminderCategory } from '@lumen/shared';
 import { permissionService } from '../../src/services/permissionService';
 import { ContextualPermissionModal } from '../../src/components/permissions/ContextualPermissionModal';
@@ -142,14 +142,33 @@ export default function RemindersScreen() {
       );
       return;
     }
+    if (isNativeAlarmAvailable() && !capabilities.overlayAllowed) {
+      // Optional: without it Android shows a popup with Stop/Snooze while another app is open
+      // (the full screen still appears on the lock screen).
+      Alert.alert(
+        'Show alarms over other apps?',
+        'On the lock screen the alarm already opens full screen. While you are using another app, Android shows it as a popup with Stop and Snooze. To open the full alarm screen over other apps too, allow “Appear on top” for Lumen.',
+        [
+          { text: 'Test without it', onPress: () => { fireTest().catch(() => {}); } },
+          { text: 'Open Settings', onPress: () => { openOverlaySettings().catch(() => {}); } },
+        ],
+      );
+      return;
+    }
+    await fireTest();
+  };
+
+  const fireTest = async () => {
     setIsTestingAlarm(true);
     const success = await sendTestReminderNotification();
     setIsTestingAlarm(false);
     if (success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
-        '🔔 Alarm Test Triggered',
-        'Your reminder alarm is firing with sound and vibration! You can lock your phone or leave the app open.',
+        '🔔 Alarm Test Set',
+        isNativeAlarmAvailable()
+          ? 'The test alarm rings in 10 seconds. Lock your phone or open another app now to see how it appears there. It rings at your alarm volume.'
+          : 'Your reminder alarm is firing with sound and vibration! You can lock your phone or leave the app open.',
         [{ text: 'Got it!' }]
       );
     } else {

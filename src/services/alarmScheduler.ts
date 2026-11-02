@@ -7,11 +7,29 @@ export interface NativeAlarmSchedule {
   timesOfDayMinutes?: number[];
   /** Calendar weekday values: 1 (Sunday) through 7 (Saturday). */
   daysOfWeek?: number[];
+  /** Tone id from SOUND_OPTIONS; 'default' rings the phone's own alarm tone. */
+  soundId?: string;
 }
 
 export interface AlarmCapabilities {
   exactAlarmsAllowed: boolean;
   fullScreenIntentAllowed: boolean;
+  /** "Appear on top": the alarm screen may open over other apps, not only as a popup. */
+  overlayAllowed: boolean;
+}
+
+/**
+ * True when the native Android alarm (plugins/withLumenAlarm) is in this build. It then owns
+ * ringing for time-based reminders — on the alarm stream, over the lock screen — so the
+ * expo-notifications copy is not also scheduled (that would ring twice).
+ */
+export function isNativeAlarmAvailable(): boolean {
+  return Platform.OS === 'android' && !!AlarmScheduler?.scheduleAlarm;
+}
+
+/** A snooze gets its own alarm so it never replaces the reminder's next regular occurrence. */
+export function snoozeAlarmKey(reminderId: string): string {
+  return `${reminderId}::snooze`;
 }
 
 /**
@@ -19,36 +37,44 @@ export interface AlarmCapabilities {
  * Falls back silently on iOS or if module unavailable.
  */
 export async function scheduleNativeAlarm(
-  reminderId: string,
+  key: string,
   title: string,
   body: string,
   triggerAtMs: number,
   schedule?: NativeAlarmSchedule,
 ): Promise<void> {
-  if (Platform.OS !== 'android' || !AlarmScheduler) return;
+  if (!isNativeAlarmAvailable()) return;
   try {
     await AlarmScheduler.scheduleAlarm(
-      reminderId,
+      key,
       title,
       body,
       triggerAtMs,
       schedule?.timesOfDayMinutes ?? [],
       schedule?.daysOfWeek ?? [],
+      schedule?.soundId ?? 'default',
     );
   } catch (e) {
     console.warn('[AlarmScheduler] scheduleAlarm failed:', e);
   }
 }
 
-/** Android 12+ exact-alarm and Android 14+ full-screen intent access. */
+/** Android 12+ exact-alarm, Android 14+ full-screen intent, and "Appear on top" access. */
 export async function getAlarmCapabilities(): Promise<AlarmCapabilities> {
   if (Platform.OS !== 'android' || !AlarmScheduler?.getCapabilities) {
-    return { exactAlarmsAllowed: true, fullScreenIntentAllowed: true };
+    return { exactAlarmsAllowed: true, fullScreenIntentAllowed: true, overlayAllowed: true };
   }
   try {
-    return await AlarmScheduler.getCapabilities();
+    const caps = await AlarmScheduler.getCapabilities();
+    return { overlayAllowed: false, ...caps };
   } catch {
-    return { exactAlarmsAllowed: false, fullScreenIntentAllowed: false };
+    return { exactAlarmsAllowed: false, fullScreenIntentAllowed: false, overlayAllowed: false };
+  }
+}
+
+export async function openOverlaySettings(): Promise<void> {
+  if (Platform.OS === 'android' && AlarmScheduler?.openOverlaySettings) {
+    await AlarmScheduler.openOverlaySettings();
   }
 }
 

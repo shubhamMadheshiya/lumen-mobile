@@ -257,7 +257,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   toggleTaskCompleted: async (id: string) => {
-    const task = get().tasks.find((t) => t._id === id);
+    let task = get().tasks.find((t) => t._id === id);
+    if (!task) {
+      const cached = await rehydrateTasks();
+      task = cached.find((t) => t._id === id);
+    }
     if (!task) return;
 
     const nextCompleted = !task.isCompleted;
@@ -441,3 +445,26 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     } catch {}
   },
 }));
+
+export async function rehydrateTasks(): Promise<ITask[]> {
+  try {
+    const cached = await AsyncStorage.getItem(TASKS_CACHE_KEY);
+    if (cached) {
+      const parsed: ITask[] = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        useTaskStore.setState({ tasks: parsed });
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('[taskStore] rehydrateTasks error:', err);
+  }
+  return [];
+}
+
+// Hydrate tasks from cache on startup
+rehydrateTasks().then((tasks) => {
+  if (tasks.length > 0) {
+    triggerWidgetSync();
+  }
+}).catch(() => {});

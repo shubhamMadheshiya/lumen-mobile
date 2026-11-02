@@ -70,15 +70,23 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 }));
 
-// Rehydrate cached config from AsyncStorage for instant offline/startup access
-AsyncStorage.getItem(CONFIG_CACHE_KEY).then(cached => {
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached);
-      if (parsed && !useConfigStore.getState().config) {
+export async function rehydrateConfig(): Promise<UserConfig | null> {
+  const current = useConfigStore.getState().config;
+  if (current) return current;
+  try {
+    const cached = await AsyncStorage.getItem(CONFIG_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached) as UserConfig;
+      if (parsed) {
         useConfigStore.setState({ config: parsed });
-        triggerWidgetSync();
+        return parsed;
       }
-    } catch {}
-  }
+    }
+  } catch {}
+  return null;
+}
+
+// Rehydrate cached config from AsyncStorage for instant offline/startup access
+rehydrateConfig().then((cfg) => {
+  if (cfg) triggerWidgetSync();
 }).catch(() => {});

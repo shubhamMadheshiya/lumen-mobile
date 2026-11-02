@@ -1,6 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
+export interface LumenWidgetTask {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+  isImportant?: boolean;
+}
+
 export interface LumenWidgetData {
   // Today glance circular ring
   completedTasks: number;
@@ -25,12 +32,78 @@ export interface LumenWidgetData {
   activeGoal?: number;
   lastUpdated: string;
   trackingDay?: string;
+
+  // My Day tasks
+  myDayTasks?: LumenWidgetTask[];
 }
 
 export const WIDGET_DATA_KEY = 'lumen:widget_snapshot_v2';
 
+export const isWaterAction = (a: any): boolean => {
+  if (!a) return false;
+  const key = (a.templateKey || '').toLowerCase();
+  const label = (a.label || '').toLowerCase();
+  const icon = (a.icon || '').trim();
+  return (
+    key === 'qa_water' ||
+    key === 'qa_hydration' ||
+    icon === '💧' ||
+    icon === '🌊' ||
+    label.includes('water') ||
+    label.includes('hydrate') ||
+    label.includes('drink')
+  );
+};
+
+export const isStandAction = (a: any): boolean => {
+  if (!a) return false;
+  const key = (a.templateKey || '').toLowerCase();
+  const label = (a.label || '').toLowerCase();
+  const icon = (a.icon || '').trim();
+  return (
+    key === 'qa_stood_up' ||
+    key === 'qa_stand' ||
+    icon === '🧍' ||
+    icon === '🧍‍♂️' ||
+    icon === '🧍‍♀️' ||
+    label.includes('stood') ||
+    label.includes('stand')
+  );
+};
+
+export const isMedsAction = (a: any): boolean => {
+  if (!a) return false;
+  const key = (a.templateKey || '').toLowerCase();
+  const label = (a.label || '').toLowerCase();
+  const icon = (a.icon || '').trim();
+  return (
+    key === 'qa_medication' ||
+    key === 'qa_meds' ||
+    icon === '💊' ||
+    label.includes('med') ||
+    label.includes('pill') ||
+    label.includes('dose') ||
+    label.includes('tablet') ||
+    label.includes('capsule') ||
+    label.includes('prescription') ||
+    label.includes('supplement')
+  );
+};
+
+export const isFlareAction = (a: any): boolean => {
+  if (!a) return false;
+  const key = (a.templateKey || '').toLowerCase();
+  const label = (a.label || '').toLowerCase();
+  const icon = (a.icon || '').trim();
+  return (
+    key === 'qa_flare' ||
+    icon === '🔥' ||
+    label.includes('flare')
+  );
+};
+
 export async function saveWidgetSnapshot(data: Partial<LumenWidgetData>): Promise<void> {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' && process.env.NODE_ENV !== 'test') return;
   try {
     const existing = await getWidgetSnapshot();
     const merged: LumenWidgetData = {
@@ -53,6 +126,8 @@ export async function saveWidgetSnapshot(data: Partial<LumenWidgetData>): Promis
       const { WaterGoalWidget } = require('./WaterGoalWidget');
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { QuickTapWidget } = require('./QuickTapWidget');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { MyDayWidget } = require('./MyDayWidget');
 
       await requestWidgetUpdate({
         widgetName: 'TodayGlanceWidget',
@@ -72,6 +147,11 @@ export async function saveWidgetSnapshot(data: Partial<LumenWidgetData>): Promis
       await requestWidgetUpdate({
         widgetName: 'QuickTapWidget',
         renderWidget: () => QuickTapWidget({ data: merged }),
+      }).catch(() => {});
+
+      await requestWidgetUpdate({
+        widgetName: 'MyDayWidget',
+        renderWidget: () => MyDayWidget({ data: merged }),
       }).catch(() => {});
     } catch {
       // Widget module or widget not placed on home screen yet
@@ -104,11 +184,17 @@ export async function getWidgetSnapshot(): Promise<LumenWidgetData> {
     activeMinutes: 0,
     activeGoal: 30,
     lastUpdated: 'Today',
+    myDayTasks: [
+      { id: '1', title: 'Morning hydration & stretch', isCompleted: true, isImportant: true },
+      { id: '2', title: 'Take afternoon medication', isCompleted: true },
+      { id: '3', title: '15-minute gentle walk', isCompleted: false, isImportant: true },
+      { id: '4', title: 'Log evening symptoms', isCompleted: false },
+    ],
   };
 }
 
-export function syncLiveWidgetsFromStores(): void {
-  if (Platform.OS !== 'android') return;
+export async function syncLiveWidgetsFromStores(): Promise<void> {
+  if (Platform.OS !== 'android' && process.env.NODE_ENV !== 'test') return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { useTaskStore } = require('../store/taskStore');
@@ -142,6 +228,13 @@ export function syncLiveWidgetsFromStores(): void {
     const totalTasks = targetTasks.length;
     const tasksLeft = Math.max(0, totalTasks - completedTasks);
 
+    const widgetMyDayTasks: LumenWidgetTask[] = (myDayTasks.length > 0 ? myDayTasks : tasks.slice(0, 5)).map((t: any) => ({
+      id: String(t._id || t.id),
+      title: String(t.title || 'Task'),
+      isCompleted: Boolean(t.isCompleted || t.completed),
+      isImportant: Boolean(t.isImportant),
+    }));
+
     // 2. Quick Actions & Taps
     const configState = useConfigStore?.getState?.();
     const quickActions: any[] = configState?.config?.quickActions || [];
@@ -164,69 +257,10 @@ export function syncLiveWidgetsFromStores(): void {
       return count;
     };
 
-    const isWater = (a: any) => {
-      const key = (a.templateKey || '').toLowerCase();
-      const label = (a.label || '').toLowerCase();
-      const icon = (a.icon || '').trim();
-      return (
-        key === 'qa_water' ||
-        key === 'qa_hydration' ||
-        icon === '💧' ||
-        icon === '🌊' ||
-        label.includes('water') ||
-        label.includes('hydrate') ||
-        label.includes('drink')
-      );
-    };
-
-    const isStand = (a: any) => {
-      const key = (a.templateKey || '').toLowerCase();
-      const label = (a.label || '').toLowerCase();
-      const icon = (a.icon || '').trim();
-      return (
-        key === 'qa_stood_up' ||
-        key === 'qa_stand' ||
-        icon === '🧍' ||
-        icon === '🧍‍♂️' ||
-        icon === '🧍‍♀️' ||
-        label.includes('stood') ||
-        label.includes('stand')
-      );
-    };
-
-    const isMeds = (a: any) => {
-      const key = (a.templateKey || '').toLowerCase();
-      const label = (a.label || '').toLowerCase();
-      const icon = (a.icon || '').trim();
-      return (
-        key === 'qa_medication' ||
-        key === 'qa_meds' ||
-        icon === '💊' ||
-        label.includes('med') ||
-        label.includes('pill') ||
-        label.includes('dose') ||
-        label.includes('tablet') ||
-        label.includes('capsule') ||
-        label.includes('prescription') ||
-        label.includes('supplement')
-      );
-    };
-
-    const isFlare = (a: any) => {
-      const key = (a.templateKey || '').toLowerCase();
-      const label = (a.label || '').toLowerCase();
-      const icon = (a.icon || '').trim();
-      return (
-        key === 'qa_flare' ||
-        icon === '🔥' ||
-        label.includes('flare')
-      );
-    };
-
-    let waterCount = getTapCountFor(isWater);
-    let stoodUpCount = getTapCountFor(isStand);
-    let medsCount = getTapCountFor(isMeds);
-    let flareCount = getTapCountFor(isFlare);
+    let waterCount = getTapCountFor(isWaterAction);
+    let stoodUpCount = getTapCountFor(isStandAction);
+    let medsCount = getTapCountFor(isMedsAction);
+    let flareCount = getTapCountFor(isFlareAction);
 
     // If medsCount is 0, check if any medication task was completed today
     if (medsCount === 0 && targetTasks.length > 0) {
@@ -241,7 +275,7 @@ export function syncLiveWidgetsFromStores(): void {
     }
 
     // Water Goal
-    const waterAction = quickActions.find(isWater);
+    const waterAction = quickActions.find(isWaterAction);
     const waterGoal = waterAction?.dailyGoal
       ? Math.round(waterAction.dailyGoal / (waterAction.defaultValue ?? 250))
       : 8;
@@ -291,7 +325,7 @@ export function syncLiveWidgetsFromStores(): void {
       }
     } catch {}
 
-    saveWidgetSnapshot({
+    await saveWidgetSnapshot({
       completedTasks: totalTasks > 0 ? completedTasks : 12,
       totalTasks: totalTasks > 0 ? totalTasks : 19,
       tasksLeft: totalTasks > 0 ? tasksLeft : 7,
@@ -307,6 +341,7 @@ export function syncLiveWidgetsFromStores(): void {
       activeMinutes,
       activeGoal,
       trackingDay: currentTrackingDay,
+      myDayTasks: widgetMyDayTasks,
     });
   } catch (err) {
     console.warn('[widgetSync] syncLiveWidgetsFromStores failed:', err);

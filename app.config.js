@@ -73,6 +73,8 @@ module.exports = ({ config }) => ({
     ],
     'react-native-health-connect',
     'expo-background-task',
+    // Native clock-style alarms (full-screen over the lock screen, alarm-volume ringing)
+    './plugins/withLumenAlarm',
     [
       'expo-build-properties',
       {
@@ -137,6 +139,21 @@ module.exports = ({ config }) => ({
             widgetCategory: 'home_screen|keyguard',
             updatePeriodMillis: 1800000,
             previewImage: './assets/widgets/quicktapwidget_preview.png',
+          },
+          {
+            name: 'MyDayWidget',
+            label: 'My Day',
+            description: "View and complete today's tasks and to-dos",
+            minWidth: '250dp',
+            minHeight: '110dp',
+            targetCellWidth: 4,
+            targetCellHeight: 2,
+            maxResizeWidth: '500dp',
+            maxResizeHeight: '400dp',
+            resizeMode: 'horizontal|vertical',
+            widgetCategory: 'home_screen|keyguard',
+            updatePeriodMillis: 1800000,
+            previewImage: './assets/widgets/mydaywidget_preview.png',
           },
         ],
       },

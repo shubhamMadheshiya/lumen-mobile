@@ -18,6 +18,8 @@ import {
   cancelAllNativeAlarms,
   cancelOrphanNativeAlarms,
   getAlarmCapabilities,
+  isNativeAlarmAvailable,
+  snoozeAlarmKey,
   type AlarmCapabilities,
 } from './alarmScheduler';
 
@@ -63,6 +65,9 @@ export const TRIGGER_TYPES = {
   WEEKLY: N?.SchedulableTriggerInputTypes?.WEEKLY ?? 'weekly',
   TIME_INTERVAL: N?.SchedulableTriggerInputTypes?.TIME_INTERVAL ?? 'timeInterval',
 };
+
+/** How long after "Test alarm" the native test alarm rings. */
+export const TEST_ALARM_DELAY_MS = 10_000;
 
 let lastNotificationError: string | null = null;
 export function getLastNotificationError(): string | null {
@@ -440,6 +445,15 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
   const categoryId = resolveCategory(reminder.category);
   const channelId = resolveChannel(reminder.category);
   const scheduledIds: string[] = [];
+  // With the native Android alarm in this build, it rings time-based reminders itself (alarm
+  // volume, full screen over the lock screen). Scheduling the expo copy too would alert twice.
+  const nativeRings = isNativeAlarmAvailable();
+  const soundId = reminder.sound || 'default';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scheduleExpo = async (request: any) => {
+    if (nativeRings) return;
+    scheduledIds.push(await N.scheduleNotificationAsync(request));
+  };
 
   const commonContent = {
     title: reminder.notificationTitle || reminder.name,
@@ -472,7 +486,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
         targetDate.setDate(targetDate.getDate() + 1);
       }
 
-      const id = await N.scheduleNotificationAsync({
+      await scheduleExpo({
         content: commonContent,
         trigger: {
           type: TRIGGER_TYPES.DATE,
@@ -480,20 +494,20 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
           ...(Platform.OS === 'android' ? { channelId } : {}),
         },
       });
-      scheduledIds.push(id);
       // Schedule native exact alarm for lock-screen delivery
       await scheduleNativeAlarm(
         reminder._id,
         commonContent.title,
         commonContent.body,
         targetDate.getTime(),
+        { soundId },
       );
     }
     // 2. DAILY
     else if (scheduleType === 'DAILY' || (reminder.type === 'time' && reminder.schedule)) {
       const { hour, minute } = parseTime(reminder.targetTime || reminder.schedule, 9, 0);
 
-      const id = await N.scheduleNotificationAsync({
+      await scheduleExpo({
         content: commonContent,
         trigger: {
           type: TRIGGER_TYPES.DAILY,
@@ -503,14 +517,13 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
           ...(Platform.OS === 'android' ? { channelId } : {}),
         },
       });
-      scheduledIds.push(id);
       // Schedule native exact alarm for today (or tomorrow if time passed)
       await scheduleNativeAlarm(
         reminder._id,
         commonContent.title,
         commonContent.body,
         nextOccurrenceAt([toMinuteOfDay(hour, minute)]),
-        { timesOfDayMinutes: [toMinuteOfDay(hour, minute)] },
+        { timesOfDayMinutes: [toMinuteOfDay(hour, minute)], soundId },
       );
     }
     // 3. WEEKLY / CUSTOM DAYS
@@ -519,7 +532,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
 
       for (const day of reminder.daysOfWeek) {
         const weekday = WEEKDAY_TO_NUMBER[day] || 2;
-        const id = await N.scheduleNotificationAsync({
+        await scheduleExpo({
           content: {
             ...commonContent,
             body: reminder.notificationMessage || 'Time for your scheduled routine',
@@ -533,7 +546,6 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
             ...(Platform.OS === 'android' ? { channelId } : {}),
           },
         });
-        scheduledIds.push(id);
       }
       const timeOfDay = toMinuteOfDay(hour, minute);
       const daysOfWeek = reminder.daysOfWeek.map(day => WEEKDAY_TO_NUMBER[day] || 2);
@@ -542,7 +554,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
         commonContent.title,
         commonContent.body,
         nextOccurrenceAt([timeOfDay], daysOfWeek),
-        { timesOfDayMinutes: [timeOfDay], daysOfWeek },
+        { timesOfDayMinutes: [timeOfDay], daysOfWeek, soundId },
       );
     }
     // 4. INTERVAL (e.g. 08:00 to 22:00 every X minutes)
@@ -559,7 +571,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
         const slotHour = Math.floor(m / 60);
         const slotMinute = m % 60;
 
-        const id = await N.scheduleNotificationAsync({
+        await scheduleExpo({
           content: {
             ...commonContent,
             body: reminder.notificationMessage || 'Hydration & Movement check-in',
@@ -572,7 +584,6 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
             ...(Platform.OS === 'android' ? { channelId } : {}),
           },
         });
-        scheduledIds.push(id);
         timesOfDayMinutes.push(m);
       }
       if (timesOfDayMinutes.length > 0) {
@@ -581,7 +592,7 @@ export async function scheduleReminder(reminder: IReminder): Promise<void> {
           commonContent.title,
           commonContent.body,
           nextOccurrenceAt(timesOfDayMinutes),
-          { timesOfDayMinutes },
+          { timesOfDayMinutes, soundId },
         );
       }
     }
@@ -631,27 +642,29 @@ export async function snoozeReminder(
   await ensureNotificationChannel();
 
   try {
-    await N.scheduleNotificationAsync({
-      content: {
-        title: title ? `⏱ (Snoozed) ${title}` : '⏱ Reminder Snoozed',
-        body: message || `Snoozed for ${snoozeMinutes} minutes`,
-        data: { reminderId, isSnoozed: true },
-        sound: 'default',
-        priority: 'max',
-        vibrate: [0, 250, 250, 250],
-        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
-      },
-      trigger: {
-        type: TRIGGER_TYPES.TIME_INTERVAL,
-        seconds: Math.max(1, snoozeMinutes * 60),
-        repeats: false,
-        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
-      },
-    });
-    // A snoozed reminder is also an alarm: use AlarmManager so it can wake a
-    // locked device instead of relying solely on a background notification.
+    if (!isNativeAlarmAvailable()) {
+      await N.scheduleNotificationAsync({
+        content: {
+          title: title ? `⏱ (Snoozed) ${title}` : '⏱ Reminder Snoozed',
+          body: message || `Snoozed for ${snoozeMinutes} minutes`,
+          data: { reminderId, isSnoozed: true },
+          sound: 'default',
+          priority: 'max',
+          vibrate: [0, 250, 250, 250],
+          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+        },
+        trigger: {
+          type: TRIGGER_TYPES.TIME_INTERVAL,
+          seconds: Math.max(1, snoozeMinutes * 60),
+          repeats: false,
+          ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+        },
+      });
+    }
+    // A snoozed reminder is also an alarm: use AlarmManager so it can wake a locked device.
+    // Its own key keeps the reminder's regular next occurrence scheduled.
     await scheduleNativeAlarm(
-      reminderId,
+      snoozeAlarmKey(reminderId),
       title ? `⏱ (Snoozed) ${title}` : '⏱ Reminder Snoozed',
       message || `Snoozed for ${snoozeMinutes} minutes`,
       Date.now() + Math.max(1, snoozeMinutes * 60) * 1000,
@@ -692,6 +705,18 @@ export async function sendTestReminderNotification(): Promise<boolean> {
     categoryIdentifier: NOTIF_CATEGORIES.WATER,
     data: { test: true, reminderId: 'test_alarm' },
   };
+
+  // Native Android alarm: ring exactly as a real reminder would. 10 seconds leaves time to
+  // lock the phone or switch to another app to see how it appears there.
+  if (isNativeAlarmAvailable()) {
+    await scheduleNativeAlarm(
+      'test_alarm',
+      '🔔 Lumen Alarm Test',
+      'Your reminder alarms, sound, and lock-screen alerts are working properly!',
+      Date.now() + TEST_ALARM_DELAY_MS,
+    );
+    return true;
+  }
 
   // Strategy 1: Attempt standard 3-second scheduled trigger with dedicated channel
   try {

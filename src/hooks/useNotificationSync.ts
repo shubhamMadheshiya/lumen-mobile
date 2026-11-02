@@ -71,6 +71,8 @@ export function useNotificationSync() {
     try {
       const { DeviceEventEmitter } = require('react-native');
       const sub = DeviceEventEmitter.addListener('LumenAlarmFired', (reminderId: string) => {
+        // Consume the native copy too, or the next cold start would reopen this alarm screen.
+        getPendingAlarm().catch(() => null);
         if (reminderId) router.push(`/alarm/${reminderId}`);
       });
       return () => sub.remove();

@@ -23,8 +23,6 @@ import {
   Zap,
   Flame,
   Plus,
-  Target,
-  Cloud,
 } from 'lucide-react-native';
 
 import { IQuickAction } from '@lumen/shared';
@@ -52,6 +50,9 @@ import { FeelingCard } from '../../src/components/home/FeelingCard';
 import { DayCheckInCard } from '../../src/components/home/DayCheckInCard';
 import { MyDaySection } from '../../src/components/home/MyDaySection';
 import { WaterQuantityModal } from '../../src/components/WaterQuantityModal';
+import { tapTotalAmount } from '../../src/store/quickLogStore';
+import { RunningTimerPill } from '../../src/components/home/RunningTimerPill';
+import { TodayMedsCard } from '../../src/components/home/TodayMedsCard';
 import { WeatherReportModal } from '../../src/components/weather/WeatherReportModal';
 import { LinkedQuickTapModal } from '../../src/components/home/LinkedQuickTapModal';
 import { ModularAvatar } from '../../src/components/avatar/ModularAvatar';
@@ -163,6 +164,13 @@ export default function TodayScreen() {
   const waterAction = config?.quickActions.find(isWaterAction);
   const waterCount = waterAction ? (todayTaps[waterAction._id]?.count ?? 0) : 0;
   const waterGoal = waterAction?.dailyGoal ? Math.round(waterAction.dailyGoal / (waterAction.defaultValue ?? 250)) : 8;
+  // Water in ml when the tap measures ml (the amount picked in the sheet is saved with each tap).
+  const waterInMl = !!waterAction && (waterAction.unit ?? 'ml') === 'ml';
+  const waterMl = waterAction ? tapTotalAmount(todayTaps[waterAction._id], waterAction.defaultValue ?? 250) : 0;
+  const waterGoalMl = waterAction?.dailyGoal ?? 2000;
+  const waterValue = waterInMl
+    ? `${waterMl >= 1000 ? `${(waterMl / 1000).toFixed(waterMl % 1000 === 0 ? 0 : 1)} L` : `${waterMl} ml`} of ${waterGoalMl >= 1000 ? `${(waterGoalMl / 1000).toFixed(waterGoalMl % 1000 === 0 ? 0 : 1)} L` : `${waterGoalMl} ml`}`
+    : `${waterCount} of ${waterGoal}`;
 
   const todayDistanceKm = todaySummary?.totalDistanceKm ?? 0;
   const todayWalkingMinutes = todaySummary?.totalDurationMinutes ?? 0;
@@ -187,9 +195,6 @@ export default function TodayScreen() {
   const wakeTimeStr = todaySession?.wakeTime
     ? new Date(todaySession.wakeTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
     : null;
-  const customGoalActions = (config?.quickActions ?? []).filter(
-    a => a.isVisible && a.dailyGoal && !isWaterAction(a),
-  );
 
   useEffect(() => {
     syncLiveWidgetsFromStores();
@@ -223,7 +228,7 @@ export default function TodayScreen() {
     switch (key) {
       case 'water':
         return {
-          icon: Droplets, tile: palette.catHabits, label: 'Water', value: `${waterCount} of ${waterGoal}`,
+          icon: Droplets, tile: palette.catHabits, label: 'Water', value: waterValue,
           onPress: () => { setSelectedWaterActionId(waterAction?._id); setWaterModalVisible(true); },
         };
       case 'walking':
@@ -272,30 +277,17 @@ export default function TodayScreen() {
     }
   };
 
-  const summaryRows: RowProps[] = [
-    ...(['water', ...compactOrder.filter(k => k !== 'water')] as GlanceMetricKey[])
-      .map(rowFor)
-      .filter((r): r is RowProps => r !== null),
-    ...customGoalActions.map<RowProps>(action => {
-      const count = todayTaps[action._id]?.count ?? 0;
-      const target = action.dailyGoal
-        ? (action.defaultValue && action.defaultValue > 1 && action.dailyGoal >= action.defaultValue
-          ? Math.max(1, Math.round(action.dailyGoal / action.defaultValue))
-          : Math.max(1, Math.round(action.dailyGoal)))
-        : 1;
-      return {
-        icon: Target, tile: action.color || palette.primary, label: action.label,
-        sub: `${Math.min(100, Math.round((count / target) * 100))}% of goal`, value: `${count} of ${target}`,
-        onPress: () => router.push('/log'),
-      };
-    }),
-    ...(weather
-      ? [{
-        icon: Cloud, tile: palette.catHabits, label: 'Weather', sub: weather.cityName,
-        value: `${weather.temperatureC}°C`, chevron: true, onPress: () => setWeatherModalVisible(true),
-      } as RowProps]
-      : []),
-  ];
+  // Summary at home screen displays health glance metrics (walking, active time, sleep, reminders).
+  // Excluded:
+  // - 'water' & custom actions (e.g. 'Stood up') because they already live in Quick Taps with progress rings.
+  // - 'quick_logs' ("Quick taps") as requested.
+  // - 'weather' (moved to header with date).
+  const EXCLUDED_SUMMARY_KEYS = new Set<GlanceMetricKey>(['water', 'quick_logs']);
+
+  const summaryRows: RowProps[] = compactOrder
+    .filter(k => !EXCLUDED_SUMMARY_KEYS.has(k))
+    .map(rowFor)
+    .filter((r): r is RowProps => r !== null);
 
   const greetingName = user?.name ? user.name.split(' ')[0] : undefined;
 
@@ -335,6 +327,20 @@ export default function TodayScreen() {
         <LargeTitleHeader
           title="Today"
           subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+          subtitleAccessory={
+            weather ? (
+              <TouchableOpacity
+                style={styles.weatherPill}
+                onPress={() => setWeatherModalVisible(true)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Weather: ${weather.temperatureC}°C, ${weather.weatherLabel}, ${weather.cityName}. Tap to view weather report.`}
+              >
+                <Text style={styles.weatherEmoji}>{weather.weatherEmoji || '🌤️'}</Text>
+                <Text style={styles.weatherTemp}>{weather.temperatureC}°C</Text>
+              </TouchableOpacity>
+            ) : null
+          }
           actions={
             <>
               <GlassCircleButton
@@ -378,6 +384,7 @@ export default function TodayScreen() {
 
             <View style={styles.block}>
               <SectionTitle title="Quick Taps" actionLabel="Customize" onAction={() => router.push('/customize/quick-actions')} />
+              <RunningTimerPill boundaryHour={boundaryHour} />
               <View style={styles.grid}>
                 {visibleActions.map(action => (
                   <QuickActionButton
@@ -445,6 +452,8 @@ export default function TodayScreen() {
 
             <MyDaySection boundaryHour={boundaryHour} />
 
+            <TodayMedsCard />
+
             <DayCheckInCard boundaryHour={boundaryHour} />
           </>
         )}
@@ -498,4 +507,20 @@ const useStyles = createThemedStyles(palette => ({
     justifyContent: 'center',
   },
   addLabel: { ...typography.subheadBold, color: palette.textSecondary },
+  weatherPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: palette.surfaceAlt,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  weatherEmoji: {
+    fontSize: 12,
+  },
+  weatherTemp: {
+    ...typography.caption1Bold,
+    color: palette.text,
+  },
 }));

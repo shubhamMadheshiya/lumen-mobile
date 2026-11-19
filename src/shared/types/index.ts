@@ -123,6 +123,8 @@ export interface IQuestion {
   templateKey?: string;
   createdAt: string;
   updatedAt: string;
+  /** What this question measures for Metrics; null = nothing, unset = guessed from the template/label. */
+  metricRole?: 'water' | 'exercise' | 'walk' | 'sleep' | null;
 }
 
 export interface IOption {
@@ -141,6 +143,8 @@ export interface IOption {
   templateKey?: string;
   createdAt: string;
   updatedAt: string;
+  /** Explore/Metrics count this option as that one (a duplicate). */
+  mergedInto?: string | null;
 }
 
 export interface IQuickAction {
@@ -162,6 +166,8 @@ export interface IQuickAction {
   templateKey?: string;
   createdAt: string;
   updatedAt: string;
+  /** What this tap measures for Metrics; null = nothing, unset = guessed from the template/label. */
+  metricRole?: 'water' | 'exercise' | 'walk' | 'sleep' | null;
 }
 
 export interface ICustomUnit {
@@ -318,6 +324,8 @@ export interface IReminder {
   // Linkages to Tracking Engine
   linkedQuickActionId?: string;   // QuickAction ID to trigger on action
   linkedQuestionId?: string;      // Questionnaire ID for deep logging
+  medicationId?: string;          // A medicine reminder: which medicine Taken/Skip marks
+  doseSlot?: string;              // …and which dose time ('HH:mm'); defaults to targetTime
 
   // Backwards compatibility with legacy fields
   type?: ReminderType;
@@ -1006,7 +1014,7 @@ export interface IHealthRecord {
 // ── Lumen AI chat attachments ────────────────────────────────────────────────
 
 /** What a Lumen AI chat attachment can point at (see server services/llm/assistant/refTypes.ts). */
-export type AiChatRefKind = 'day' | 'note' | 'task' | 'list' | 'medication' | 'record' | 'flare' | 'experiment' | 'pattern' | 'weekly_report' | 'file';
+export type AiChatRefKind = 'day' | 'note' | 'task' | 'list' | 'medication' | 'record' | 'flare' | 'experiment' | 'pattern' | 'weekly_report' | 'file' | 'analysis';
 
 export interface IAiChatRef {
   kind: AiChatRefKind;
